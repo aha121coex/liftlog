@@ -1,6 +1,6 @@
 # LiftLog — personal iPhone workout tracker
 
-Security review revision of LiftLog v4. **Google authentication and synchronization are disabled pending least-privilege authentication and data-integrity testing.** Offline logging and local backups remain available. This revision is proposed through a pull request; it does not publish the app.
+LiftLog 4.1 — a local-only workout tracker. **No Google account, OAuth client or cloud sync is required.** Workouts save on your iPhone; sharing and backups happen when you choose.
 
 ## Features
 
@@ -10,7 +10,13 @@ Security review revision of LiftLog v4. **Google authentication and synchronizat
 - Offline local saving, an IndexedDB mirror, JSON backup/restore and CSV export
 - Routine import and workout summary sharing for ChatGPT
 
-The intended Google integration is two-way synchronization with a private Sheet, including routine edits made through ChatGPT's separately authorized connection. The legacy implementation is retained for review but blocked from authenticating or making requests. See [SECURITY_REVIEW.md](SECURITY_REVIEW.md) for findings and release gates, and [AGENTS.md](AGENTS.md) for the development contract. Do not enable it by simply changing the flag.
+## Share with ChatGPT
+
+In **More → Work with ChatGPT → Share backup**, choose ChatGPT if your iPhone offers it in the share sheet. Otherwise save the JSON file to Files and attach it to your chat. The file includes your full history, custom exercises, routines, settings and current workout. Sharing does not modify the database or grant ongoing access. You can also share a short summary. Import a suggested routine using **Import a routine**; completed workouts remain unchanged.
+
+ChatGPT cannot directly open your iPhone database. It can analyze the snapshot you attach and return a routine in LiftLog's import format. For example: “Review my workout history and return a revised routine as LiftLog routine JSON, without changing my recorded workouts.” The existing routine importer matches exercise names in your library.
+
+Legacy Google sync and its experimental replacement core remain disabled and outside current scope. See [SECURITY_REVIEW.md](SECURITY_REVIEW.md) for the historical review and [AGENTS.md](AGENTS.md) for current requirements.
 
 ## Local development and checks
 
@@ -23,20 +29,18 @@ npm test
 python -m http.server 8000
 ```
 
-Open `http://localhost:8000/`. For the optional Chromium smoke test, install Python Playwright and Chromium, then run `python scripts/browser-smoke.py`. The script uses `/usr/bin/chromium`, serves a temporary localhost site, and tests synthetic data only. It covers touch-sized logging, reload, offline operation, backup round-trip and local recovery. It does not establish physical iPhone Safari reliability.
+Open `http://localhost:8000/`. For the optional browser smoke test, install Python Playwright and Chromium, run `npm run build`, then `python scripts/browser-smoke.py`. Use `python scripts/upgrade-smoke.py` to test the v4 upgrade against synthetic history. The smoke script also accepts `--url` for testing a published release in an isolated profile. The script uses `/usr/bin/chromium`, serves a temporary localhost site, and tests synthetic data only. It covers touch-sized logging, reload, offline operation, backup round-trip and local recovery. It does not establish physical iPhone Safari reliability.
 
 ## Data safety
 
 The primary key remains `liftlog.personal.v1`; updates must preserve it. IndexedDB is a second copy on the same device, not an independent backup. Export JSON to Files regularly and before updates, restores or changing phones. CSV is for inspection and cannot restore the complete app.
 
-Restore validates before replacing state, preserves the previous raw database at `liftlog.personal.v1.beforeRestore`, and removes old cloud baselines and pending deletions. Failure to save either the recovery copy or replacement aborts restore. Restore replaces rather than merges local history. The recovery slot is overwritten on the next restore and removed by explicit reset.
+Restore validates before replacing state, preserves the previous raw database at `liftlog.personal.v1.beforeRestore`, and removes old cloud baselines and pending deletions. Failure to save either the recovery copy or replacement aborts restore. Restore replaces rather than merges local history. Use **Download data from before last restore** to recover the preserved raw database. The recovery slot is overwritten on the next restore and removed by explicit reset.
 
-Unreadable saved data opens a recovery screen instead of overwriting history. Download the raw data before restoring a known-good backup. Startup waits for the IndexedDB recovery check before accepting workout edits when the primary copy is missing. Erasing local data requires two confirmations and does not delete the private Sheet.
+Unreadable saved data opens a recovery screen instead of overwriting history. Download the raw data before restoring a known-good backup. Startup waits for the IndexedDB recovery check before accepting workout edits when the primary copy is missing. Erasing local data requires two confirmations. No remote data is changed.
 
-## Future deployment
+## Installation and updates
 
-The permanent intended address is `https://aha121coex.github.io/liftlog/`. Keep the same origin, path, manifest identity and storage keys across upgrades; do not reinstall or clear Safari data to update. Changes must be reviewed in a PR before any publishing step. This review does not enable Pages, modify hosting configuration or merge to main.
-
-For future OAuth setup, use a public web client ID with exact authorized origins, short-lived tokens in memory, and a tested file-specific authorization grant. Never publish client secrets, tokens, workout backups or Sheet data. The existing `spreadsheets` scope is too broad for the intended least-privilege design. A hard-coded Sheet ID does not narrow its grant.
+The permanent address is `https://aha121coex.github.io/liftlog/`. Keep the same origin, path, manifest identity and storage keys across upgrades; do not reinstall or clear Safari data to update. Source changes are reviewed in a PR. The publishing workflow tests and builds an explicit allowlist of public app files, then deploys it through GitHub Pages. Personal workouts and backups are never part of the published artifact. Run `npm run build` to inspect the artifact in `dist/`.
 
 Only one LiftLog window can edit at a time. If the app reports another open window, close it and tap Try again. This requires a modern Safari version with Web Locks support. Before the first upgrade from v4, export a backup and close all old LiftLog tabs/windows, since old versions do not participate in the lock. Future updates install a verified complete shell and activate after the previous windows close, preserving saved history.

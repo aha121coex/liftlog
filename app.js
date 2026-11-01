@@ -1,6 +1,6 @@
 'use strict';
 
-// LiftLog v4.0: offline one-tap training with authenticated Google Sheets synchronization.
+// LiftLog v4.1: local-first one-tap training and user-initiated file sharing.
 const STORAGE_KEY = 'liftlog.personal.v1';
 const view = document.getElementById('view');
 const sheetRoot = document.getElementById('sheet-root');
@@ -19,6 +19,7 @@ let dbWriteQueue = Promise.resolve();
 let changedSinceBoot = false;
 let recoveryRequired = false;
 let recoveryPending = false;
+let recoveryRaw = null;
 let writerReady = false;
 let writerMessage = 'Opening workout storage…';
 const SECONDARY_DB = 'liftlog-offline-backup';
@@ -140,18 +141,21 @@ async function recoverSecondaryIfNeeded() {
   try {
     if(localStorage.getItem(STORAGE_KEY))return;
     const db=await openSecondaryDB();
-    const value=await new Promise((resolve,reject)=>{
+    let value;
+    try {value=await new Promise((resolve,reject)=>{
       const tx=db.transaction(SECONDARY_DB_STORE,'readonly');
       const req=tx.objectStore(SECONDARY_DB_STORE).get('current');
-      req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
-    });
-    db.close();
+      req.onsuccess=()=>{value=req.result;};req.onerror=()=>reject(req.error);
+      tx.oncomplete=()=>resolve(value);tx.onerror=()=>reject(tx.error);
+      tx.onabort=()=>reject(tx.error||Error('Recovery transaction aborted'));
+    });}finally{db.close();}
     if(!changedSinceBoot && value) {
+      recoveryRaw=JSON.stringify(value);
       validateBackup(value);
-      state=hydrateState(value);try {localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}catch(_){}
+      state=hydrateState(value);try {localStorage.setItem(STORAGE_KEY,JSON.stringify(state));storeAvailable=true;}catch(_){storeAvailable=false;}
       render();toast('Recovered workouts from second on-device copy',4500);
     }
-  }catch(err){console.info('Secondary storage unavailable',err);}
+  }catch(err){recoveryRequired=true;storeAvailable=false;console.info('Secondary storage needs recovery',err);}
   finally {recoveryPending=false;render();}
 }
 function persist() {
@@ -164,7 +168,6 @@ function persist() {
   // A second on-device copy reduces the chance of accidental local storage loss;
   // it is NOT a cloud backup and can be deleted with all Safari site data.
   dbWriteQueue=dbWriteQueue.then(()=>writeSecondary(snapshot)).catch(err=>console.warn('Second storage copy unavailable',err));
-  window.LiftLogSync?.schedule();
   return storeAvailable;
 }
 
@@ -339,10 +342,10 @@ function saveTemplate() {
 function deleteTemplate(id) {
   const t=state.templates.find(t=>t.id===id);if(!t)return;
   if(!confirm(`Delete the routine “${t.name}”? Workout history is unaffected.`))return;
-  state.templates=state.templates.filter(x=>x.id!==id);state.sync??={baseline:{workouts:{},exercises:{},templates:{}}};state.sync.deletedTemplatesIds??=[];state.sync.deletedTemplatesIds.push(id);persist();render();
+  state.templates=state.templates.filter(x=>x.id!==id);persist();render();
 }
 function suggestedPlan() {
-  // Synced Google Sheet routines replace the built-in rotation when complete.
+  // Preserve a previously saved routine rotation when complete.
   // Rotate A/B/C among completed sessions. Ad hoc workouts still count toward rotation.
   const nextIndex=state.history.length%3;
   const remote=state.remotePlans?.[state.settings.location];
@@ -518,19 +521,19 @@ function undoLastSet() {
 }
 function renderMore() {
   const custom=state.exercises.filter(e=>e.custom).length;
-  return pageShell(`<div class="eyebrow">YOUR APP</div><h1 class="page-title">Settings & backup</h1><p class="subtle margin-bottom">Offline-first: your workouts save on this phone, with optional Google Sheets sync.</p>
+  return pageShell(`<div class="eyebrow">LIFTLOG 4.1 · ON THIS DEVICE</div><h1 class="page-title">Settings & backup</h1><p class="subtle margin-bottom">Your workouts save on this phone. Share a file when you want ChatGPT to review them.</p>
     <div class="stack">${backupDue()?'<div class="notice warn">Backup recommended: you have new workouts saved only on this iPhone. Export your JSON backup to Files.</div>':''}<div class="card"><h2 class="section-title margin-bottom">Workout defaults</h2>
       <div class="input-row"><label for="location-select">Equipment</label><select id="location-select" data-action="settings-location"><option value="gym" ${state.settings.location==='gym'?'selected':''}>Full gym</option><option value="small" ${state.settings.location==='small'?'selected':''}>Small gym</option></select></div><div class="divider"></div>
       <div class="input-row"><label for="unit-select">Weight units</label><select id="unit-select" data-action="settings-unit"><option value="lb" ${unit()==='lb'?'selected':''}>Pounds (lb)</option><option value="kg" ${unit()==='kg'?'selected':''}>Kilograms (kg)</option></select></div><div class="divider"></div>
       <div class="input-row"><label for="rest-select">Rest timer</label><select id="rest-select" data-action="settings-rest">${[0,60,90,120,180].map(v=>`<option value="${v}" ${state.settings.restSeconds===v?'selected':''}>${v===0?'Off':`${v} seconds`}</option>`).join('')}</select></div></div>
     <div class="card"><h2 class="section-title margin-bottom">Your routines</h2><p class="subtle">Save a workout as a routine to reuse its exercise order and individual sets. Your latest logged values take priority next time.</p>${state.templates.length?state.templates.map(t=>`<div class="routine-row"><div class="grow"><strong>${esc(t.name)}</strong><div class="subtle small">${t.items.length} exercises</div></div><button class="button danger sm" data-action="delete-template" data-id="${esc(t.id)}">Delete</button></div>`).join(''):'<p class="subtle">None saved yet. Open a workout and tap Save as reusable routine.</p>'}</div>
     <div class="card"><h2 class="section-title margin-bottom">Exercise library</h2><p class="subtle">${state.exercises.length} exercises (${custom} custom). Add movements that aren't in the starter library.</p><div class="row margin-top-sm"><button class="button dark sm" data-action="library">Browse exercises</button><button class="button sm" data-action="custom-exercise">+ Custom exercise</button></div></div>
-    ${window.LiftLogSync?.renderCard()||''}
-    <div class="card"><h2 class="section-title margin-bottom">Work with ChatGPT</h2><p class="subtle">Share a compact summary of your latest sessions and current workout. Tap to copy it, or use the iPhone share sheet to send it to ChatGPT. No background connection is claimed.</p><div class="stack"><button class="button full" data-action="share-coach">Share with ChatGPT / iPhone</button><button class="button dark full" data-action="copy-coach">Copy summary</button></div></div>
+    <div class="card"><h2 class="section-title margin-bottom">Work with ChatGPT</h2><p class="subtle">Share a backup containing your full history, exercises, routines and current workout. Choose ChatGPT if available in the share sheet, or save the file to Files and attach it in your chat. ChatGPT receives only the snapshot you send. You can import a suggested routine below.</p><div class="stack"><button class="button full" data-action="share-backup">Share backup</button><button class="button dark full" data-action="share-coach">Share short summary</button><button class="button dark full" data-action="copy-coach">Copy summary</button></div></div>
     <div class="card"><h2 class="section-title margin-bottom">Import plans from ChatGPT</h2><p class="subtle">I can generate a routine in a simple format that you paste here. It becomes a reusable routine; it never changes completed workouts.</p><button class="button dark full" data-action="show-plan-import">Import a routine</button></div>
     <div class="card"><h2 class="section-title margin-bottom">Your data</h2><p class="subtle">Back up to the Files app regularly, especially before changing phones or clearing Safari website data.</p>
-      <div class="stack"><button class="button dark full" data-action="export-json">Export complete backup (.json)</button><button class="button dark full" data-action="export-csv">Export sets as spreadsheet (.csv)</button><button class="button ghost full" data-action="import-json">Restore from JSON backup</button></div></div>
-    <div class="notice">Offline after the app has been opened online at least once. Your workout history saves immediately in browser storage. Connected Google Sheets sync adds a cloud copy. iOS may remove website data under some circumstances, so keep a backup.</div>
+      <div class="stack"><button class="button dark full" data-action="export-json">Export complete backup (.json)</button><button class="button dark full" data-action="export-csv">Export sets as spreadsheet (.csv)</button><button class="button ghost full" data-action="import-json">Restore from JSON backup</button><button class="button ghost full" data-action="export-previous">Download data from before last restore</button></div></div>
+    <div class="card"><h2 class="section-title margin-bottom">Keep LiftLog on your Home Screen</h2><p class="subtle">Open this address in Safari, tap Share, then Add to Home Screen. To load a new version, close all LiftLog windows and reopen while online. Your saved history stays on this device.</p></div>
+    <div class="notice">Offline after the app has been opened online at least once. Your workout history saves immediately in browser storage. Sharing a file does not create an automatic cloud backup. iOS may remove website data under some circumstances, so keep a backup.</div>
     <div class="card"><h2 class="section-title margin-bottom">Reset</h2><p class="subtle">Permanently clear workouts, custom exercises, and preferences from this app on this device.</p><button class="button danger sm" data-action="reset">Erase all local data</button></div></div>`);
 }
 function formatCountdown(ms) {const sec=Math.max(0,Math.ceil(ms/1000));return `${String(Math.floor(sec/60)).padStart(2,'0')}:${String(sec%60).padStart(2,'0')}`;}
@@ -666,13 +669,35 @@ function exportJSON() {
   downloadBlob('LiftLog-backup-'+localDate()+'.json',JSON.stringify(state,null,2),'application/json');
   toast('Backup prepared — make sure to save it to Files');
 }
+async function shareBackup() {
+  const filename='LiftLog-backup-'+localDate()+'.json';
+  const content=JSON.stringify(state,null,2);
+  try {
+    const file=new File([content],filename,{type:'application/json'});
+    if(navigator.share&&navigator.canShare?.({files:[file]})){
+      await navigator.share({files:[file],title:'LiftLog workout backup'});
+      toast('Share sheet closed. Confirm the file was attached in your chat.');
+      return;
+    }
+  }catch(err){if(err.name==='AbortError')return;}
+  downloadBlob(filename,content,'application/json');
+  toast('Save the backup to Files, then attach it in ChatGPT.',6500);
+}
 function exportRecovery() {
   try {
-    const raw=localStorage.getItem(STORAGE_KEY);
+    const raw=localStorage.getItem(STORAGE_KEY)??recoveryRaw;
     if(raw===null){toast('No saved database is available');return;}
     downloadBlob('LiftLog-recovery-'+localDate()+'.json',raw,'application/json');
     toast('Saved data prepared — save it to Files');
   }catch(err){toast('Could not read saved data: '+err.message,5000);}
+}
+function exportPreviousBackup() {
+  try {
+    const raw=localStorage.getItem(STORAGE_KEY+'.beforeRestore');
+    if(raw===null){toast('No previous restore backup is available');return;}
+    downloadBlob('LiftLog-before-restore-'+localDate()+'.json',raw,'application/json');
+    toast('Previous saved data prepared — save it to Files');
+  }catch(err){toast('Could not read the previous backup: '+err.message,5000);}
 }
 function exportCSV() {
   const rows=[['date','workout','exercise','set_number','weight','unit','reps_or_duration','measurement','completed','workout_notes','exercise_notes']];
@@ -818,10 +843,6 @@ document.addEventListener('click',event=>{
   if(recoveryRequired&&!['export-recovery','import-json','reset'].includes(action))return;
   if(action==='export-recovery'){exportRecovery();return;}
   if(action==='close-sheet'){closeSheet();return;}
-  if(action==='google-connect'){window.LiftLogSync?.connect();return;}
-  if(action==='google-disconnect'){window.LiftLogSync?.disconnect();return;}
-  if(action==='google-sync'){window.LiftLogSync?.sync();return;}
-  if(action==='sync-choose-phone'||action==='sync-choose-sheet'){window.LiftLogSync?.chooseConflict(b.dataset.type,id,action==='sync-choose-phone'?'phone':'sheet');return;}
   if(action==='nav'){setTab(b.dataset.value);return;}
   if(action==='location'){state.settings.location=b.dataset.value;persist();render();return;}
   if(action==='duration'){state.settings.sessionMinutes=Number(b.dataset.value);persist();render();return;}
@@ -901,7 +922,7 @@ document.addEventListener('click',event=>{
   if(action==='toggle-history'){historyOpen=historyOpen===id?null:id;render();return;}
   if(action==='edit-history'){editHistory(id);return;}
   if(action==='delete-history'){
-    if(confirm('Permanently delete this workout from the phone?')){state.history=state.history.filter(s=>s.id!==id);if(state.sync){state.sync.deletedWorkoutIds??=[];state.sync.deletedWorkoutIds.push(id);}historyOpen=null;persist();render();toast('Workout deleted');}return;
+    if(confirm('Permanently delete this workout from the phone?')){state.history=state.history.filter(s=>s.id!==id);historyOpen=null;persist();render();toast('Workout deleted');}return;
   }
   if(action==='library'){showLibrary();return;}
   if(action==='custom-exercise'){showCustomExercise();return;}
@@ -910,14 +931,16 @@ document.addEventListener('click',event=>{
     if(!confirm('Delete this custom exercise from the library?'))return;
     const used=[...state.history,...state.templates,...(state.active?[state.active]:[])].some(s=>s.items.some(i=>i.exerciseId===id));
     if(used){toast('Exercise is used by a workout or routine; cannot delete');return;}
-    state.exercises=state.exercises.filter(e=>e.id!==id);state.sync??={baseline:{workouts:{},exercises:{},templates:{}}};state.sync.deletedExercisesIds??=[];state.sync.deletedExercisesIds.push(id);persist();showLibrary();return;
+    state.exercises=state.exercises.filter(e=>e.id!==id);persist();showLibrary();return;
   }
   if(action==='copy-coach'){copyForChatGPT();return;}
   if(action==='share-coach'){shareForChatGPT();return;}
+  if(action==='share-backup'){shareBackup();return;}
   if(action==='show-plan-import'){showPlanImporter();return;}
   if(action==='copy-plan-format'){copyPlanRequest();return;}
   if(action==='import-plan'){importSuggestedPlan();return;}
   if(action==='export-json'){exportJSON();return;}
+  if(action==='export-previous'){exportPreviousBackup();return;}
   if(action==='export-csv'){exportCSV();return;}
   if(action==='import-json'){document.getElementById('backup-file').click();return;}
   if(action==='reset'){safeReset();return;}
@@ -950,7 +973,6 @@ window.addEventListener('visibilitychange',()=>{if(!document.hidden)updateRestDi
 if('serviceWorker' in navigator && location.protocol.startsWith('http')){
   window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(err=>console.warn('Offline installer failed:',err)));
 }
-window.LiftLogSync?.init({getState:()=>state,persist,render,toast,tab:()=>tab,baseExercises:()=>BASE_EXERCISES});
 render();
 // The browser releases this exclusive lock when the document closes. A second
 // Safari tab or Home Screen window must never save an independent stale snapshot.

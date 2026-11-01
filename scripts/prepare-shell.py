@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 import sys
 root = Path(__file__).resolve().parents[1]
-paths = ['index.html','styles.css','sync.js','app.js','manifest.webmanifest','icon-192.png','icon-512.png','apple-touch-icon.png']
+paths = ['index.html','styles.css','app.js','manifest.webmanifest','icon-192.png','icon-512.png','apple-touch-icon.png']
 hashes = {'./'+p:hashlib.sha256((root/p).read_bytes()).hexdigest() for p in paths}
 hashes['./'] = hashes['./index.html']
 serialized = json.dumps(hashes,sort_keys=True,separators=(',',':'))

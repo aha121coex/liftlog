@@ -1,11 +1,15 @@
-LIFTLOG SECURITY REVIEW REVISION
+LIFTLOG 4.1 — LOCAL WORKOUT LOGGING
 
-Google authentication and synchronization are deliberately disabled until the
-release gates in SECURITY_REVIEW.md pass. Do not enable production sync or
-upload directly to main. Submit changes in a pull request for review.
+Open https://aha121coex.github.io/liftlog/ in Safari.
+Tap Share > Add to Home Screen to install.
 
-Local development and backup/recovery instructions are in README.md.
-Developer requirements and security constraints are in AGENTS.md.
+No Google account, OAuth setup, API key or subscription is required.
+Log workouts offline after the initial online installation completes.
+Use More > Share backup to send your history to ChatGPT, or save the file
+in Files and attach it manually. Import returned routine JSON in More.
 
-No Pages deployment is performed by the test workflow. Preserve the existing
-Home Screen URL, manifest identity and storage keys when a release is approved.
+Export a backup before updates or switching phones. Close all old LiftLog
+windows and reopen online to activate a new version. Keep the same Home
+Screen installation and URL; do not clear Safari data to update.
+
+README.md documents backup/recovery, AGENTS.md documents development rules.

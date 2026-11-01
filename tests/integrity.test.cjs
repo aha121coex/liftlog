@@ -107,3 +107,35 @@ test('finishing a workout never claims durable success after quota failure',asyn
   const h=boot(JSON.stringify(d),()=>true);await h.ready();h.run('finishWorkout()');
   assert.equal(h.run('state.history.length'),1);assert.match(h.elements.toast.textContent,/memory only/);
 });
+
+test('sharing sends a full immutable snapshot without changing stored data',async()=>{
+  const original=JSON.stringify(fixture());const h=boot(original);await h.ready();let sent;
+  h.context.navigator.canShare=()=>true;h.context.navigator.share=async payload=>{sent=payload;};
+  await h.run('shareBackup()');const d=JSON.parse(await sent.files[0].text());
+  assert.equal(d.history[0].items[0].sets[0].weight,'10.25');assert.equal(d.templates[0].name,'Routine');
+  assert.equal(h.data.get(KEY),original);assert.equal(h.downloads.length,0);
+});
+test('unsupported file sharing downloads an attachable backup',async()=>{
+  const h=boot(JSON.stringify(fixture()));await h.ready();await h.run('shareBackup()');
+  assert.equal(h.downloads.length,1);assert.equal(JSON.parse(h.downloads[0][1]).history.length,1);assert.match(h.elements.toast.textContent,/attach it in ChatGPT/);
+});
+test('cancelled sharing does not trigger a surprise download',async()=>{
+  const h=boot(JSON.stringify(fixture()));await h.ready();h.context.navigator.canShare=()=>true;h.context.navigator.share=async()=>{throw Object.assign(Error('cancel'),{name:'AbortError'});};
+  await h.run('shareBackup()');assert.equal(h.downloads.length,0);
+});
+test('failed file sharing falls back to download',async()=>{
+  const h=boot(JSON.stringify(fixture()));await h.ready();h.context.navigator.canShare=()=>true;h.context.navigator.share=async()=>{throw Error('unavailable');};
+  await h.run('shareBackup()');assert.equal(h.downloads.length,1);
+});
+
+test('previous restore data can be recovered without modifying current workouts',async()=>{
+  const h=boot(JSON.stringify(fixture()));await h.ready();const raw='{old raw bytes';h.data.set(KEY+'.beforeRestore',raw);
+  h.run('exportPreviousBackup()');assert.equal(h.downloads[0][1],raw);assert.equal(h.run('state.history.length'),1);
+});
+test('unreadable secondary recovery never enables an empty overwrite',async()=>{
+  const h=boot(JSON.stringify(fixture()));await h.ready();h.data.delete(KEY);let closed=false;
+  const tx={objectStore:()=>({get(){const req={};queueMicrotask(()=>{req.result={schema:1,history:[null]};req.onsuccess();tx.oncomplete();});return req;}})};
+  h.context.fakeDB={transaction:()=>tx,close(){closed=true;}};h.run('recoveryPending=true;openSecondaryDB=()=>Promise.resolve(fakeDB)');await h.ready();
+  assert.equal(h.run('recoveryRequired'),true);assert.equal(h.run('persist()'),false);assert.equal(h.data.has(KEY),false);assert.equal(closed,true);
+  h.run('exportRecovery()');assert.equal(JSON.parse(h.downloads[0][1]).history[0],null);
+});

@@ -1,6 +1,6 @@
-# Google sync implementation status
+# Google sync prototype — paused
 
-Production authentication and sync remain blocked. No production workout cells have been read or changed.
+The user has removed cloud sync from current requirements. Development is paused in favor of local data plus user-initiated file sharing. No Google OAuth setup is needed. The remaining design below is historical and is not a release requirement for local-only LiftLog. Production authentication and sync remain blocked. No production workout cells have been read or changed.
 
 `sync-protocol.js` is a standalone experimental journal and durable-outbox core, deliberately not loaded by index.html or used by the legacy Google adapter. It supports immutable entity versions, parent references, explicit tombstones, checksums, duplicate operation deduplication, preserved conflicting heads, serialized durable mutations, reconciliation after ambiguous responses and verified readback before clearing pending work.
 
