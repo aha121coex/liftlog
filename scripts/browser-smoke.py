@@ -16,6 +16,7 @@ parser=argparse.ArgumentParser()
 parser.add_argument('--url', help='Test a published app in a fresh isolated browser profile')
 parser.add_argument('--engine', choices=['chromium','webkit'], default='chromium')
 args=parser.parse_args()
+if args.engine=='webkit' and args.url:parser.error('WebKit offline checks require the local test origin; use Chromium for --url')
 root = Path(__file__).resolve().parents[1]/'dist'
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
     def translate_path(self, path):
@@ -58,13 +59,24 @@ try:
         assert (first['weight'], first['reps'], first['done']) == ('12.75','9',True)
         page.reload()
         assert page.evaluate('state.active.items[0].sets[0].done') is True
-        context.set_offline(True)
+        # WebKit's automation-wide offline mode may reject navigation before
+        # dispatching a service-worker fetch. Stop the actual origin instead.
+        if args.engine=='webkit':
+            print('Testing offline startup with the HTTP origin stopped',flush=True)
+            port=server.server_port
+            server.shutdown();server.server_close()
+        else:
+            context.set_offline(True)
         page.reload()
         page.wait_for_function('() => typeof state !== "undefined"')
         page.locator('[data-tab="workout"]').click()
         page.locator('[data-action="quick-complete"]').click()
         assert page.evaluate('state.active.items[0].sets[1].done') is True
-        context.set_offline(False)
+        if args.engine=='webkit':
+            server=http.server.ThreadingHTTPServer(('127.0.0.1',port),functools.partial(QuietHandler,directory=str(root)))
+            threading.Thread(target=server.serve_forever,daemon=True).start()
+        else:
+            context.set_offline(False)
         page.locator('[data-tab="more"]').click()
         with page.expect_download() as info:
             page.locator('[data-action="share-backup"]').click()
