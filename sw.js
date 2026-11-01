@@ -1,6 +1,6 @@
 /* LiftLog service worker — network first, offline fallback.
    Never cache user workout records, which live in on-device storage. */
-const CACHE = 'liftlog-shell-2026-11-01-v4';
+const CACHE = 'liftlog-shell-2026-11-01-review-1';
 const ASSETS = [
   './', './index.html', './styles.css', './sync.js', './app.js', './manifest.webmanifest',
   './icon-192.png', './icon-512.png', './apple-touch-icon.png'

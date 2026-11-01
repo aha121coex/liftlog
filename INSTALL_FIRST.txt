@@ -1,10 +1,11 @@
-LIFTLOG V4 QUICK START
+LIFTLOG SECURITY REVIEW REVISION
 
-1. Unzip and upload all individual files to the root of https://github.com/aha121coex/liftlog (not the ZIP).
-2. GitHub repository Settings > Pages > Deploy from branch > main > /(root) > Save.
-3. In the shared Gmail account, create an OAuth WEB client in Google Cloud with JavaScript origin: https://aha121coex.github.io
-4. Enable the Google Sheets API; add aha121coex@gmail.com as a test user on the OAuth consent screen.
-5. Open https://aha121coex.github.io/liftlog/ in Safari, More > Google Sheets sync, paste the OAuth client ID, Connect Google.
-6. Once Google sync is confirmed, Safari Share > Add to Home Screen.
+Google authentication and synchronization are deliberately disabled until the
+release gates in SECURITY_REVIEW.md pass. Do not enable production sync or
+upload directly to main. Submit changes in a pull request for review.
 
-Detailed steps and data safety notes are in README.md. OAuth setup is a required one-time action; it is not already connected.
+Local development and backup/recovery instructions are in README.md.
+Developer requirements and security constraints are in AGENTS.md.
+
+No Pages deployment is performed by the test workflow. Preserve the existing
+Home Screen URL, manifest identity and storage keys when a release is approved.

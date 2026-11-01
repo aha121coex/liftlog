@@ -1,0 +1,32 @@
+# LiftLog development contract
+
+## Product requirements
+LiftLog is a personal iPhone Home Screen PWA. Keep one-tap set completion fast and immediately saved without network dependencies. Recall each individual set's previous weight and reps, including ramp-up sets. Preserve exact manual input and independent exercise-specific lb/kg increments. Retain custom exercises, adjustable saved routines, recommendations, full history, progress, notes, timers and import/export.
+
+The intended online system is secure two-way synchronization with a private Google Sheet, allowing ChatGPT to inspect history and adjust routines through its separately authorized Sheet connection. That connection is distinct from browser OAuth. Never make the Sheet public to support either integration.
+
+Preserve history across upgrades at the permanent GitHub Pages origin and `/liftlog/` path. Never require reinstalling, clearing site data or changing storage keys for an update. Backups, recovery, deletion and conflict resolution are product requirements, not optional maintenance.
+
+## Current architecture
+- `index.html`, `styles.css`: static mobile UI; deferred classic scripts.
+- `app.js`: state, recommendations, rendering, delegated events, local persistence. Schema 1; primary key `liftlog.personal.v1`. History, exercises, templates, active session and settings are local. Active edits may share item/set IDs with a completed session.
+- Primary localStorage saves synchronously. A serialized IndexedDB queue mirrors snapshots into `liftlog-offline-backup` / `snapshots` / `current`. Both stores share one browser failure domain. Neither is an independent backup.
+- `sync.js`: legacy Google token client, canonical hashes and three-way comparison; five Sheet tabs: Workouts, Sets, Exercises, Routines, Routine Items. IDs are identity; row numbers are only temporary locators.
+- Production sync is deliberately disabled in source. The Google identity script is absent, and the Content Security Policy disallows external scripts and connections. Reopening sync requires a deliberate policy review as well as protocol tests. Do not remove these gates as routine cleanup.
+- `sw.js`: versioned, network-first shell cache, limited to same-origin requests in registration scope. Never cache authenticated API responses or workout exports.
+- No server, build step or runtime package dependencies. Node built-ins run automated tests.
+
+## Development conventions
+Read `SECURITY_REVIEW.md` before sync changes. Implement on a review branch and open a PR; do not merge, enable Pages or publish without user direction. Keep the existing UI and workout behavior. Make bounded changes with regression evidence. Run `npm run check` and `npm test`. Optional browser coverage: `python scripts/browser-smoke.py` (Python Playwright and `/usr/bin/chromium` required). Tests use synthetic records only. Add meaningful tests for failure cases, not just successful requests. Do not claim simulator checks establish iPhone reliability.
+
+Keep schema migrations explicit, versioned, validated and reversible. Preserve raw unreadable storage before any recovery attempt. Never silently seed an empty database over failed parsing. The recovery screen pauses edits and permits raw-data download or explicit restore/reset. When the primary is missing, startup must finish checking the secondary before enabling edits. Restore validates before changing storage, saves the preceding raw database at `liftlog.personal.v1.beforeRestore`, aborts on write failure, and discards imported sync baselines/tombstones. This recovery slot is local and overwritten on the next restore; export independent backups before restoring. Do not merge backups by array position.
+
+## Security constraints
+Never commit personal workouts, exports, tokens, passwords, client secrets or service account keys. Public client IDs and Sheet IDs are identifiers, not authorization; avoid unnecessary personal identifiers. All GitHub Pages projects under the same account share an origin: their JavaScript can access the same localStorage and IndexedDB. Do not host untrusted applications under this origin. Consider a dedicated custom domain before enabling sensitive sync. Keep access tokens memory-only and short-lived. No refresh token in browser storage. Escape untrusted text at HTML boundaries; treat Sheet cells, imported JSON and routine names as untrusted. Write Sheet values as RAW to prevent formula execution.
+
+Prefer `drive.file` with explicit file selection/grant for the intended Sheet. An ID hard-coded in JavaScript does not restrict a broad spreadsheets token. Test existing-file access with the real consent flow before adopting scope changes; never silently broaden scope to fix a 403. Keep exact authorized origins and account/Sheet confirmation in the design. Do not enable production authentication or reads/writes until least-privilege and data-integrity gates pass.
+
+## Required future sync protocol
+Use immutable operation IDs, stable entity IDs, durable outbox, explicit revisions, tombstones and a persisted device identity. Stage a snapshot; never acknowledge mutable live objects after awaiting network. Serialize local sync runs and detect concurrent devices/Sheet writers. Preserve both copies on conflicts and show their content before resolution. Missing rows are not deletion authorization. Retry after ambiguous timeout by reconciliation; never blindly append again. Parent/child writes require atomic commit or a recoverable transaction journal. Clear pending deletions only after verified remote acknowledgement. Preserve active sessions and exercise references when deleting library entries.
+
+Before release, use a disposable private Sheet and synthetic data to test consent denial, expiry, revocation, wrong account/file, duplicate IDs, malformed rows, concurrent edits, deletion/edit conflicts, network loss at every write boundary, lost responses, reload/retry, restore with stale tombstones and edits during upload. Then test iPhone Safari and standalone mode, offline cold start, update during a workout, quota failure, interrupted persistence and backup round-trip. Record evidence and limitations in the PR. Production Sheet data must remain untouched during these tests.

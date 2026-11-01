@@ -17,6 +17,8 @@ let focusedSetKey = null;
 let lastSetAction = null;
 let dbWriteQueue = Promise.resolve();
 let changedSinceBoot = false;
+let recoveryRequired = false;
+let recoveryPending = false;
 const SECONDARY_DB = 'liftlog-offline-backup';
 const SECONDARY_DB_STORE = 'snapshots';
 
@@ -99,13 +101,14 @@ function hydrateState(d) {
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return emptyState();
+    if (!raw) { recoveryPending=true; return emptyState(); }
     const d = JSON.parse(raw);
-    if (!d || !Array.isArray(d.history) || !Array.isArray(d.exercises)) throw Error('Invalid saved data');
+    validateBackup(d);
     return hydrateState(d);
   } catch (err) {
     console.error('Could not load LiftLog data:',err);
     storeAvailable=false;
+    recoveryRequired=true;
     return emptyState();
   }
 }
@@ -117,6 +120,7 @@ function openSecondaryDB() {
     req.onupgradeneeded=()=>req.result.createObjectStore(SECONDARY_DB_STORE);
     req.onsuccess=()=>resolve(req.result);
     req.onerror=()=>reject(req.error);
+    req.onblocked=()=>reject(Error('Another LiftLog window is blocking storage access'));
   });
 }
 async function writeSecondary(snapshot) {
@@ -125,9 +129,11 @@ async function writeSecondary(snapshot) {
     const tx=db.transaction(SECONDARY_DB_STORE,'readwrite');
     tx.objectStore(SECONDARY_DB_STORE).put(snapshot,'current');
     tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);
+    tx.onabort=()=>reject(tx.error||Error('Storage transaction aborted'));
   });} finally {db.close();}
 }
 async function recoverSecondaryIfNeeded() {
+  if(!recoveryPending)return;
   if(changedSinceBoot)return;
   try {
     if(localStorage.getItem(STORAGE_KEY))return;
@@ -138,13 +144,16 @@ async function recoverSecondaryIfNeeded() {
       req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
     });
     db.close();
-    if(!changedSinceBoot && value && Array.isArray(value.history) && Array.isArray(value.exercises)) {
+    if(!changedSinceBoot && value) {
+      validateBackup(value);
       state=hydrateState(value);try {localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}catch(_){}
       render();toast('Recovered workouts from second on-device copy',4500);
     }
   }catch(err){console.info('Secondary storage unavailable',err);}
+  finally {recoveryPending=false;render();}
 }
 function persist() {
+  if(recoveryRequired||recoveryPending){toast('Saved data needs recovery before saving.',6500);return false;}
   changedSinceBoot=true;
   const snapshot=deepCopy(state);
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot)); storeAvailable=true; }
@@ -357,6 +366,8 @@ function repeatLastWorkout() {
 }
 function setTab(next) {tab=next;closeSheet();render();window.scrollTo({top:0,behavior:'instant'});}
 function render() {
+  if(recoveryPending){view.innerHTML=pageShell('<h1>Checking saved workouts…</h1><p>Please wait while LiftLog checks the second on-device copy.</p>');return;}
+  if(recoveryRequired){view.innerHTML=pageShell(`<h1>Saved data needs recovery</h1><p>LiftLog could not read the saved database. Logging is paused to protect it. Download the saved data before restoring a known-good backup.</p><div class="stack"><button class="button full" data-action="export-recovery">Download saved data</button><button class="button dark full" data-action="import-json">Restore JSON backup</button><button class="button danger" data-action="reset">Erase local data and start fresh</button></div>`);return;}
   const views={today:renderToday,workout:renderWorkout,history:renderHistory,progress:renderProgress,more:renderMore};
   view.innerHTML=(views[tab] || renderToday)();
   document.querySelectorAll('[data-tab]').forEach(btn=>{
@@ -636,12 +647,12 @@ function changeUnits(next) {
   const old=unit();
   const factor=old==='lb'?1/2.2046226218:2.2046226218;
   if(!confirm(`Convert all recorded and in-progress weights from ${old} to ${next}? This also changes the displayed unit.`)) {render();return;}
-  for(const session of [...state.history,...(state.active?[state.active]:[])])for(const item of session.items||[])for(const s of item.sets||[]){
+  for(const session of [...state.history,...state.templates,...(state.active?[state.active]:[])])for(const item of session.items||[])for(const s of item.sets||[]){
     if(s.weight!==''&&s.weight!==null&&Number.isFinite(Number(s.weight)))s.weight=String(roundWeight(Number(s.weight)*factor));
   }
   state.settings.unit=next;persist();render();toast('Weights converted to '+next);
 }
-function csvCell(value) { const raw=String(value??'');const safe=/^[=+@]/.test(raw)?'\''+raw:raw; return '"'+safe.replace(/"/g,'""')+'"';}
+function csvCell(value) { const raw=String(value??'');const safe=/^[\s]*[=+@-]|^[\t\r\n]/.test(raw)?'\''+raw:raw; return '"'+safe.replace(/"/g,'""')+'"';}
 function downloadBlob(filename,content,mime) {
   const blob=new Blob([content],{type:mime});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;a.style.display='none';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
@@ -649,6 +660,14 @@ function exportJSON() {
   state.settings.lastBackupWorkoutCount=state.history.length;state.settings.lastBackupAt=new Date().toISOString();persist();
   downloadBlob('LiftLog-backup-'+localDate()+'.json',JSON.stringify(state,null,2),'application/json');
   toast('Backup prepared — make sure to save it to Files');
+}
+function exportRecovery() {
+  try {
+    const raw=localStorage.getItem(STORAGE_KEY);
+    if(raw===null){toast('No saved database is available');return;}
+    downloadBlob('LiftLog-recovery-'+localDate()+'.json',raw,'application/json');
+    toast('Saved data prepared — save it to Files');
+  }catch(err){toast('Could not read saved data: '+err.message,5000);}
 }
 function exportCSV() {
   const rows=[['date','workout','exercise','set_number','weight','unit','reps_or_duration','measurement','completed','workout_notes','exercise_notes']];
@@ -688,15 +707,54 @@ async function copyForChatGPT() {
     toast('Copied. Paste into your ChatGPT conversation.',4500);
   }catch(err){showSheet(`<div class="sheet-top"><h2 class="sheet-title">Copy this for ChatGPT</h2><button class="micro-btn" data-action="close-sheet">✕</button></div><textarea rows="14" readonly style="width:100%;min-height:240px">${esc(text)}</textarea><p class="subtle small">Select all, copy, and paste into ChatGPT.</p>`);}
 }
+// Validate the complete backup before confirmation or any storage mutation.
+function validateBackup(d) {
+  const fail=()=>{throw Error('Invalid or incomplete LiftLog backup');};
+  const obj=x=>x && typeof x==='object' && !Array.isArray(x);
+  const text=x=>typeof x==='string';
+  const ids=new Set();
+  const id=x=>{if(!text(x)||!x||['__proto__','constructor','prototype'].includes(x)||ids.has(x))fail();ids.add(x);};
+  const numeric=x=>x==='' || ((typeof x==='string'||typeof x==='number') && Number.isFinite(Number(x)) && Number(x)>=0);
+  const strings=(o,keys)=>{for(const key of keys)if(o[key]!=null&&!text(o[key]))fail();};
+  if(!obj(d)||d.schema!==1||!obj(d.settings)||!['lb','kg'].includes(d.settings.unit)||!Array.isArray(d.history)||!Array.isArray(d.exercises))fail();
+  const checkItems=(items,routine=false)=>{
+    if(!Array.isArray(items))fail();
+    for(const i of items){
+      if(!obj(i)||!text(i.exerciseId)||!Array.isArray(i.sets))fail();
+      strings(i,['note']);
+      if(!routine)id(i.id);
+      for(const s of i.sets){if(!obj(s)||!numeric(s.weight)||!numeric(s.reps)||s.done!=null&&typeof s.done!=='boolean')fail();strings(s,['completedAt']);if(!routine)id(s.id);}
+    }
+  };
+  for(const e of d.exercises){
+    if(!obj(e)||!text(e.name)||!e.name)fail();id(e.id);
+    strings(e,['category','equipment','measure']);
+    if(e.measure!=null&&!['reps','seconds','minutes'].includes(e.measure))fail();
+    for(const key of ['defaultSets','defaultReps','increment','incrementKg'])if(e[key]!=null&&!numeric(e[key]))fail();
+  }
+  const checkWorkout=w=>{if(!obj(w)||!text(w.date)||!text(w.title))fail();strings(w,['startedAt','endedAt','notes','location']);checkItems(w.items);};
+  for(const w of d.history){if(!obj(w))fail();id(w.id);checkWorkout(w);}
+  // Active edits intentionally reuse the saved workout's item/set IDs.
+  if(d.active!=null){if(!obj(d.active)||!text(d.active.id))fail();const saved=new Set(ids);ids.clear();id(d.active.id);checkWorkout(d.active);ids.clear();for(const x of saved)ids.add(x);}
+  if(d.templates!==undefined){if(!Array.isArray(d.templates))fail();for(const t of d.templates){if(!obj(t)||!text(t.name))fail();id(t.id);checkItems(t.items,true);}}
+  return d;
+}
+
 function importBackup(file) {
   if(!file)return;if(file.size>8*1024*1024){toast('Backup is too large (limit: 8 MB)');return;}
   const reader=new FileReader();reader.onload=()=>{
     try {
       const imported=JSON.parse(reader.result);
-      if(imported.schema!==1||!Array.isArray(imported.history)||!Array.isArray(imported.exercises)||!imported.settings||!['lb','kg'].includes(imported.settings.unit))throw Error('Not a valid LiftLog backup');
-      if(imported.history.some(s=>!Array.isArray(s?.items)||s.items.some(i=>!Array.isArray(i?.sets))) || imported.exercises.some(e=>!e?.id||!e?.name))throw Error('Backup content is incomplete');
+      validateBackup(imported);
       if(!confirm(`Restore ${imported.history.length} workouts? This REPLACES everything currently stored on this device.`))return;
-      state=hydrateState(imported);
+      // Preserve the exact old database before replacing it; failure aborts restore.
+      const previous=localStorage.getItem(STORAGE_KEY);
+      if(previous!==null)localStorage.setItem(STORAGE_KEY+'.beforeRestore',previous);
+      delete imported.sync; // Old baselines and pending deletions must never replay.
+      delete imported.remotePlans;
+      const replacement=hydrateState(imported);
+      localStorage.setItem(STORAGE_KEY,JSON.stringify(replacement));
+      state=replacement;recoveryRequired=false;recoveryPending=false;
       if(!Array.isArray(state.active?.items) && state.active)state.active=null;
       persist();historyOpen=null;progressExercise=null;setTab('today');toast('Backup restored successfully');
     }catch(err){toast('Could not restore: '+err.message,5000);}
@@ -718,7 +776,14 @@ function saveCustom() {
 function safeReset() {
   if(!confirm('Erase ALL your saved workouts and custom exercises from this device? Export a backup first.'))return;
   if(!confirm('Final confirmation: this cannot be undone without a backup.'))return;
-  state=emptyState();persist();historyOpen=null;progressExercise=null;closeSheet();setTab('today');toast('All local data erased');
+  try {
+    const replacement=emptyState();
+    // A failed write must not unlock the recovery screen or claim success.
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(replacement));
+    localStorage.removeItem(STORAGE_KEY+'.beforeRestore');
+    state=replacement;recoveryRequired=false;recoveryPending=false;
+    persist();historyOpen=null;progressExercise=null;closeSheet();setTab('today');toast('All local data erased');
+  }catch(err){toast('Could not erase local data: '+err.message,5000);}
 }
 
 // Event delegation keeps inputs responsive on iOS (no re-render while typing).
@@ -726,6 +791,9 @@ document.addEventListener('click',event=>{
   const tabButton=event.target.closest('[data-tab]');if(tabButton){setTab(tabButton.dataset.tab);return;}
   const b=event.target.closest('[data-action]');if(!b)return;
   const action=b.dataset.action,id=b.dataset.id,itemId=b.dataset.item;
+  if(recoveryPending)return;
+  if(recoveryRequired&&!['export-recovery','import-json','reset'].includes(action))return;
+  if(action==='export-recovery'){exportRecovery();return;}
   if(action==='close-sheet'){closeSheet();return;}
   if(action==='google-connect'){window.LiftLogSync?.connect();return;}
   if(action==='google-disconnect'){window.LiftLogSync?.disconnect();return;}
@@ -816,9 +884,9 @@ document.addEventListener('click',event=>{
   if(action==='custom-exercise'){showCustomExercise();return;}
   if(action==='save-custom'){saveCustom();return;}
   if(action==='delete-custom'){
-    if(!confirm('Delete this custom exercise from the library? Previously logged workouts will keep a fallback name only if the exercise is deleted.'))return;
-    const used=state.history.some(s=>s.items.some(i=>i.exerciseId===id))||state.active?.items.some(i=>i.exerciseId===id);
-    if(used){toast('Exercise is in workout history; cannot delete');return;}
+    if(!confirm('Delete this custom exercise from the library?'))return;
+    const used=[...state.history,...state.templates,...(state.active?[state.active]:[])].some(s=>s.items.some(i=>i.exerciseId===id));
+    if(used){toast('Exercise is used by a workout or routine; cannot delete');return;}
     state.exercises=state.exercises.filter(e=>e.id!==id);state.sync??={baseline:{workouts:{},exercises:{},templates:{}}};state.sync.deletedExercisesIds??=[];state.sync.deletedExercisesIds.push(id);persist();showLibrary();return;
   }
   if(action==='copy-coach'){copyForChatGPT();return;}
@@ -832,6 +900,7 @@ document.addEventListener('click',event=>{
   if(action==='reset'){safeReset();return;}
 });
 document.addEventListener('input',event=>{
+  if(recoveryRequired||recoveryPending)return;
   const target=event.target; const action=target.dataset.action;
   if(action==='exercise-search'){refreshPicker(target.value);return;}
   if(action==='set-field'){
@@ -847,6 +916,7 @@ document.addEventListener('input',event=>{
 document.addEventListener('change',event=>{
   const t=event.target;
   if(t.id==='backup-file'){importBackup(t.files?.[0]);t.value='';return;}
+  if(recoveryRequired||recoveryPending)return;
   const action=t.dataset.action;
   if(action==='progress-exercise'){progressExercise=t.value;render();return;}
   if(action==='settings-location'){state.settings.location=t.value;persist();render();return;}
