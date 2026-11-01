@@ -48,3 +48,7 @@
 .routine-row strong{font-size:14px}
 .time-pick .segment{font-size:11px;padding:6px 5px}
 @media(max-width:370px){.tiny-action{font-size:10px;padding:7px}.time-pick .segment{font-size:10px}}
+/* Routine selection stays available when starting mid-rotation. */
+.plan-picker-title{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:4px 0;border:0;background:transparent;color:inherit;font:inherit;text-align:left;overflow-wrap:anywhere;cursor:pointer}
+.plan-picker-title:focus-visible{outline:2px solid var(--mint);outline-offset:5px;border-radius:5px}
+.picker-option[aria-pressed="true"]{border-color:var(--mint);background:#1d352b}

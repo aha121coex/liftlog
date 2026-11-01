@@ -14,6 +14,7 @@ files = ['index.html','app.js','styles.css','sw.js','manifest.webmanifest','icon
 for name in files:
     shutil.copy2(root/name, output/name)
 (output/'.nojekyll').touch()
+version = json.loads((root/'package.json').read_text())['version']
 commit = subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()
-(output/'release.json').write_text(json.dumps({'version':'4.1.0','commit':commit,'storageSchema':1})+'\n')
-print('Built LiftLog 4.1.0: '+str(len(list(output.iterdir())))+' public files')
+(output/'release.json').write_text(json.dumps({'version':version,'commit':commit,'storageSchema':1})+'\n')
+print('Built LiftLog '+version+': '+str(len(list(output.iterdir())))+' public files')

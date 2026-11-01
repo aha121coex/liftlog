@@ -1,6 +1,6 @@
 # LiftLog — personal iPhone workout tracker
 
-LiftLog 4.1 — a local-only workout tracker. **No Google account, OAuth client or cloud sync is required.** Workouts save on your iPhone; sharing and backups happen when you choose.
+LiftLog 4.2 — a local-only workout tracker. **No Google account, OAuth client or cloud sync is required.** Workouts save on your iPhone; sharing and backups happen when you choose.
 
 ## Features
 
@@ -9,6 +9,12 @@ LiftLog 4.1 — a local-only workout tracker. **No Google account, OAuth client 
 - Custom exercises, saved routines, recommendations, full history and progress
 - Offline local saving, an IndexedDB mirror, JSON backup/restore and CSV export
 - Routine import and workout summary sharing for ChatGPT
+
+## Choose where to start
+
+Tap the workout name on Today to choose A, B or C. You can start mid-rotation without logging yesterday's workout. Your choice is saved if you close the app before starting. Finish B and the next suggestion becomes C; finish C and it returns to A. Use suggestion switches back to the automatic choice.
+
+Suggestions follow the latest recorded routine for your current equipment. Blank/custom workouts and edits to old sessions do not advance the rotation. Full-gym and travel-gym rotations are independent. You can also tap the active workout title or Change routine on Today; switching to a different workout requires confirmation before replacing unfinished sets.
 
 ## Share with ChatGPT
 

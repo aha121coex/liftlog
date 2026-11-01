@@ -1,4 +1,4 @@
-LIFTLOG 4.1 — LOCAL WORKOUT LOGGING
+LIFTLOG 4.2 — LOCAL WORKOUT LOGGING
 
 Open https://aha121coex.github.io/liftlog/ in Safari.
 Tap Share > Add to Home Screen to install.
