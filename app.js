@@ -731,12 +731,25 @@ function validateBackup(d) {
     strings(e,['category','equipment','measure']);
     if(e.measure!=null&&!['reps','seconds','minutes'].includes(e.measure))fail();
     for(const key of ['defaultSets','defaultReps','increment','incrementKg'])if(e[key]!=null&&!numeric(e[key]))fail();
+    if(e.defaultSets!=null&&(!Number.isInteger(Number(e.defaultSets))||Number(e.defaultSets)<1||Number(e.defaultSets)>16))fail();
   }
   const checkWorkout=w=>{if(!obj(w)||!text(w.date)||!text(w.title))fail();strings(w,['startedAt','endedAt','notes','location']);checkItems(w.items);};
   for(const w of d.history){if(!obj(w))fail();id(w.id);checkWorkout(w);}
   // Active edits intentionally reuse the saved workout's item/set IDs.
   if(d.active!=null){if(!obj(d.active)||!text(d.active.id))fail();const saved=new Set(ids);ids.clear();id(d.active.id);checkWorkout(d.active);ids.clear();for(const x of saved)ids.add(x);}
   if(d.templates!==undefined){if(!Array.isArray(d.templates))fail();for(const t of d.templates){if(!obj(t)||!text(t.name))fail();id(t.id);checkItems(t.items,true);}}
+  if(d.sync!=null){
+    if(!obj(d.sync))fail();
+    for(const key of ['deletedWorkoutIds','deletedExercisesIds','deletedTemplatesIds'])if(d.sync[key]!=null&&(!Array.isArray(d.sync[key])||d.sync[key].some(x=>!text(x))))fail();
+    if(d.sync.baseline!=null&&!obj(d.sync.baseline))fail();
+  }
+  if(d.remotePlans!=null){
+    if(!obj(d.remotePlans))fail();
+    for(const plans of Object.values(d.remotePlans)){
+      if(!Array.isArray(plans))fail();
+      for(const plan of plans)if(!obj(plan)||!text(plan.key)||!text(plan.name)||!Array.isArray(plan.ids)||plan.ids.some(x=>!text(x)))fail();
+    }
+  }
   return d;
 }
 

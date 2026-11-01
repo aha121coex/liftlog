@@ -89,3 +89,8 @@ test('IndexedDB abort rejects the mirror write and closes the database',async()=
   h.run('openSecondaryDB=()=>Promise.resolve(fakeDB)');
   await assert.rejects(h.run('writeSecondary({schema:1})'),/Aborted/);assert.equal(closed,true);
 });
+
+for(const [field,value] of [['sync','invalid'],['remotePlans',{gym:[{name:'Broken'}]}]])test('malformed cached '+field+' enters recovery',async()=>{
+  const d=fixture();d[field]=value;const raw=JSON.stringify(d);const h=boot(raw);await h.ready();
+  assert.equal(h.run('recoveryRequired'),true);assert.equal(h.data.get(KEY),raw);
+});
