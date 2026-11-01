@@ -1,6 +1,6 @@
 'use strict';
 
-// LiftLog v4.1: local-first one-tap training and user-initiated file sharing.
+// LiftLog v4.2: local-first one-tap training and user-initiated file sharing.
 const STORAGE_KEY = 'liftlog.personal.v1';
 const view = document.getElementById('view');
 const sheetRoot = document.getElementById('sheet-root');
@@ -91,9 +91,10 @@ function weightStep(ex) {
 function stepLabel(ex) {return `±${fmtWeight(weightStep(ex))} ${unit()}`;}
 
 function deepCopy(value) { return JSON.parse(JSON.stringify(value)); }
-function emptyState() { return {schema:1,exercises:deepCopy(BASE_EXERCISES),history:[],active:null,templates:[],settings:{unit:'lb',location:'gym',restSeconds:90,sessionMinutes:45,lastBackupWorkoutCount:0,lastBackupAt:null},createdAt:new Date().toISOString()}; }
+function emptyState() { return {schema:1,exercises:deepCopy(BASE_EXERCISES),history:[],active:null,templates:[],settings:{planChoices:{},unit:'lb',location:'gym',restSeconds:90,sessionMinutes:45,lastBackupWorkoutCount:0,lastBackupAt:null},createdAt:new Date().toISOString()}; }
 function hydrateState(d) {
   d.settings = {...emptyState().settings,...(d.settings || {})};
+  d.settings.planChoices = {...(d.settings.planChoices || {})};
   d.templates = Array.isArray(d.templates) ? d.templates : [];
   if(![25,45,60].includes(Number(d.settings.sessionMinutes))) d.settings.sessionMinutes=45;
   if(!['lb','kg'].includes(d.settings.unit)) d.settings.unit='lb';
@@ -344,21 +345,57 @@ function deleteTemplate(id) {
   if(!confirm(`Delete the routine “${t.name}”? Workout history is unaffected.`))return;
   state.templates=state.templates.filter(x=>x.id!==id);persist();render();
 }
-function suggestedPlan() {
-  // Preserve a previously saved routine rotation when complete.
-  // Rotate A/B/C among completed sessions. Ad hoc workouts still count toward rotation.
-  const nextIndex=state.history.length%3;
-  const remote=state.remotePlans?.[state.settings.location];
-  return remote?.length===3 ? remote[nextIndex] : PLANS[state.settings.location][nextIndex];
+function rotationPlans(location=state.settings.location) {
+  const saved=state.remotePlans?.[location];
+  return saved?.length===3 && new Set(saved.map(p=>p.key)).size===3 ? saved : PLANS[location];
 }
-function startWorkout(kind) {
+function lastRotationWorkout(location=state.settings.location) {
+  const keys=new Set(rotationPlans(location).map(p=>p.key));
+  // Use the workout date/start time, so editing an old session does not move
+  // the rotation backwards. Ignore blank/custom sessions and other equipment.
+  return state.history.map((session,index)=>({session,index}))
+    .filter(({session:s})=>(s.location||'gym')===location && keys.has(s.planKey))
+    .sort((a,b)=>(b.session.date||'').localeCompare(a.session.date||'') ||
+      (b.session.startedAt||b.session.endedAt||'').localeCompare(a.session.startedAt||a.session.endedAt||'') || b.index-a.index)[0]?.session || null;
+}
+function automaticPlan() {
+  const plans=rotationPlans(),last=lastRotationWorkout();
+  return plans[last?(plans.findIndex(p=>p.key===last.planKey)+1)%plans.length:0];
+}
+function suggestedPlan() {
+  const key=state.settings.planChoices?.[state.settings.location];
+  return rotationPlans().find(p=>p.key===key) || automaticPlan();
+}
+function showPlanPicker() {
+  const automatic=automaticPlan(),last=lastRotationWorkout(),selected=state.active?.location===state.settings.location?state.active.planKey:suggestedPlan().key;
+  showSheet(`<div class="sheet-top"><div><h2 class="sheet-title">Choose your workout</h2><p class="subtle">${state.active?'Switching routines replaces your unfinished workout after confirmation.':'Missed a log? Start wherever you are in your rotation.'}</p></div><button class="micro-btn" data-action="close-sheet" aria-label="Close">✕</button></div>
+    <div class="picker-options"><button class="picker-option" data-action="select-plan" data-key="auto"><div><strong>Use suggestion · ${esc(automatic.name)}</strong><span>${last?'Next after your recorded '+esc(last.title):'No recorded routine yet — you can choose any workout below.'}</span></div><span aria-hidden="true">↻</span></button>
+    ${rotationPlans().map(p=>`<button class="picker-option" data-action="select-plan" data-key="${esc(p.key)}" aria-pressed="${p.key===selected}"><div><strong>${esc(p.name)}</strong><span>${esc(p.focus)} · ${planExercises(p).length} exercises</span></div><span aria-hidden="true">${p.key===selected?'✓':'→'}</span></button>`).join('')}</div>`);
+}
+function choosePlan(key) {
+  const plan=key==='auto'?automaticPlan():rotationPlans().find(p=>p.key===key);
+  if(!plan)return;
+  if(state.active){
+    if(state.active.location===state.settings.location && state.active.planKey===plan.key){setTab('workout');return;}
+    startWorkout('plan',key);return;
+  }
+  if(key==='auto')delete state.settings.planChoices[state.settings.location];
+  else state.settings.planChoices[state.settings.location]=key;
+  persist();closeSheet();render();
+}
+function startWorkout(kind,requestedKey=null) {
+  const plan=requestedKey==='auto'?automaticPlan():requestedKey===null?suggestedPlan():rotationPlans().find(p=>p.key===requestedKey);
+  if(!plan)return false;
   if(state.active && !confirm('Discard your unfinished workout and start another?')) return;
-  const plan=suggestedPlan();
+  if(requestedKey!==null){
+    if(requestedKey==='auto')delete state.settings.planChoices[state.settings.location];
+    else state.settings.planChoices[state.settings.location]=requestedKey;
+  }
   state.active={id:uid('workout'),date:localDate(),startedAt:new Date().toISOString(),endedAt:null,
     title:kind==='blank'?'My workout':plan.name,planKey:kind==='blank'?null:plan.key,
     location:state.settings.location,notes:'',restUntil:null,editingId:null,
     items:kind==='blank'?[]:planExercises(plan).map(createItem)};
-  focusedSetKey=null;lastSetAction=null;persist(); tab='workout';render();window.scrollTo({top:0,behavior:'instant'});
+  focusedSetKey=null;lastSetAction=null;persist();closeSheet();tab='workout';render();window.scrollTo({top:0,behavior:'instant'});return true;
 }
 function repeatLastWorkout() {
   const prior=sessionsSorted()[0];if(!prior)return;
@@ -396,13 +433,13 @@ function renderToday() {
   const plan=suggestedPlan();const last=sessionsSorted()[0];const isActive=!!state.active;
   return pageShell(`<div class="eyebrow">${esc(new Intl.DateTimeFormat('en-US',{weekday:'long',month:'short',day:'numeric'}).format(new Date()))}</div>
     <h1 class="page-title">Keep getting stronger<span style="color:var(--mint)">.</span></h1>
-    <p class="subtle margin-bottom">Your workouts, your pace. Saved instantly on this phone; synced with Google when connected.</p>
+    <p class="subtle margin-bottom">Your workouts, your pace. Saved instantly on this phone.</p>
     ${!storeAvailable?'<div class="notice warn margin-bottom">Your browser is not saving data reliably. Export a backup before leaving this page.</div>':''}
-    <div class="hero card"><div class="eyebrow">${isActive?'WORKOUT IN PROGRESS':'UP NEXT · ROTATION '+plan.key}</div>
-    <h2>${esc(isActive?state.active.title:plan.name)}</h2>
+    <div class="hero card"><div class="eyebrow">${isActive?'WORKOUT IN PROGRESS':'UP NEXT · TAP TO CHANGE'}</div>
+    <h2>${isActive?esc(state.active.title):`<button class="plan-picker-title" data-action="show-plan-picker" aria-label="Choose workout routine" aria-haspopup="dialog">${esc(plan.name)} <span aria-hidden="true">⌄</span></button>`}</h2>
     <p>${esc(isActive?'Your sets are saved as you go. Jump right back in.':plan.description)}</p>
-    <div class="hero-actions"><button class="button" data-action="${isActive?'continue':'start-plan'}">${isActive?'Continue workout':'Start suggested workout'} <span aria-hidden="true">→</span></button>
-    ${!isActive?'<button class="button dark" data-action="start-blank">Start blank</button>':''}</div></div>
+    <div class="hero-actions"><button class="button" data-action="${isActive?'continue':'start-plan'}">${isActive?'Continue workout':'Start workout '+esc(plan.key)} <span aria-hidden="true">→</span></button>
+    ${!isActive?'<button class="button dark" data-action="start-blank">Start blank</button>':'<button class="button dark" data-action="show-plan-picker" aria-haspopup="dialog">Change routine</button>'}</div></div>
     ${!isActive && state.templates.length?`<div class="section-heading"><h2 class="section-title">Your routines</h2></div><div class="card routines-list">${state.templates.map(t=>`<div class="routine-row"><div class="grow"><strong>${esc(t.name)}</strong><div class="subtle small">${t.items.length} exercises · ${esc(t.location==='small'?'Travel gym':'Full gym')}</div></div><button class="button sm" data-action="start-template" data-id="${esc(t.id)}">Start</button><button class="micro-btn" data-action="delete-template" data-id="${esc(t.id)}" aria-label="Delete ${esc(t.name)}">✕</button></div>`).join('')}</div>`:''}
     <div class="section-heading"><h2 class="section-title">Your week</h2><span class="subtle">Last 7–30 days</span></div>${renderMetrics()}
     <div class="section-heading"><h2 class="section-title">Workout setup</h2></div>
@@ -417,9 +454,9 @@ function renderToday() {
 }
 function renderWorkout() {
   const w=state.active;
-  if(!w) return pageShell(`<div class="eyebrow">WORKOUT</div><h1 class="page-title">Ready when you are.</h1><p class="subtle">Start a planned full-body session or build a workout from scratch.</p><div class="stack margin-top"><button class="button full" data-action="start-plan">Start suggested workout</button><button class="button dark full" data-action="start-blank">Start blank workout</button></div>`);
+  if(!w) return pageShell(`<div class="eyebrow">WORKOUT</div><h1 class="page-title">Ready when you are.</h1><p class="subtle">Start a planned full-body session or build a workout from scratch.</p><div class="stack margin-top"><button class="button full" data-action="start-plan">Start ${esc(suggestedPlan().name)}</button><button class="button dark full" data-action="show-plan-picker" aria-haspopup="dialog">Choose routine</button><button class="button dark full" data-action="start-blank">Start blank workout</button></div>`);
   const count=doneSets(w).length;const total=w.items.reduce((n,i)=>n+i.sets.length,0);
-  return pageShell(`<div class="workout-head"><div class="grow"><div class="eyebrow">${w.editingId?'EDITING SAVED WORKOUT':'ACTIVE WORKOUT'}</div><h1 class="page-title">${esc(w.title)}</h1><div class="subtle">${formatDate(w.date)} · ${count}/${total} sets completed</div></div>
+  return pageShell(`<div class="workout-head"><div class="grow"><div class="eyebrow">${w.editingId?'EDITING SAVED WORKOUT':'ACTIVE WORKOUT'}</div><h1 class="page-title"><button class="plan-picker-title" data-action="show-plan-picker" aria-label="Change workout routine" aria-haspopup="dialog">${esc(w.title)} <span aria-hidden="true">⌄</span></button></h1><div class="subtle">${formatDate(w.date)} · ${count}/${total} sets completed</div></div>
   <button class="button dark sm" data-action="edit-meta">Edit details</button></div>
   <div class="badges session-badges"><span class="chip green">${esc(w.location==='gym'?'Full gym':'Small gym')}</span><span class="chip">${esc(unit())} weights</span>${w.planKey?`<span class="chip">Workout ${esc(w.planKey)}</span>`:''}</div>
   ${renderQuickPanel()}
@@ -521,7 +558,7 @@ function undoLastSet() {
 }
 function renderMore() {
   const custom=state.exercises.filter(e=>e.custom).length;
-  return pageShell(`<div class="eyebrow">LIFTLOG 4.1 · ON THIS DEVICE</div><h1 class="page-title">Settings & backup</h1><p class="subtle margin-bottom">Your workouts save on this phone. Share a file when you want ChatGPT to review them.</p>
+  return pageShell(`<div class="eyebrow">LIFTLOG 4.2 · ON THIS DEVICE</div><h1 class="page-title">Settings & backup</h1><p class="subtle margin-bottom">Your workouts save on this phone. Share a file when you want ChatGPT to review them.</p>
     <div class="stack">${backupDue()?'<div class="notice warn">Backup recommended: you have new workouts saved only on this iPhone. Export your JSON backup to Files.</div>':''}<div class="card"><h2 class="section-title margin-bottom">Workout defaults</h2>
       <div class="input-row"><label for="location-select">Equipment</label><select id="location-select" data-action="settings-location"><option value="gym" ${state.settings.location==='gym'?'selected':''}>Full gym</option><option value="small" ${state.settings.location==='small'?'selected':''}>Small gym</option></select></div><div class="divider"></div>
       <div class="input-row"><label for="unit-select">Weight units</label><select id="unit-select" data-action="settings-unit"><option value="lb" ${unit()==='lb'?'selected':''}>Pounds (lb)</option><option value="kg" ${unit()==='kg'?'selected':''}>Kilograms (kg)</option></select></div><div class="divider"></div>
@@ -642,6 +679,7 @@ function finishWorkout() {
   delete record.editingId;
   if(w.editingId){const idx=state.history.findIndex(s=>s.id===w.editingId);if(idx>=0){record.id=w.editingId;state.history[idx]=record;}else state.history.push(record);}
   else state.history.push(record);
+  if(!w.editingId && record.planKey)delete state.settings.planChoices[record.location];
   state.active=null;focusedSetKey=null;historyOpen=record.id;const saved=persist();setTab('history');toast(saved?(w.editingId?'Workout changes saved':'Workout saved — nice work'):'Workout is in memory only — export a backup before closing',6500);
 }
 function editHistory(id) {
@@ -747,6 +785,7 @@ function validateBackup(d) {
   const numeric=x=>x==='' || ((typeof x==='string'||typeof x==='number') && Number.isFinite(Number(x)) && Number(x)>=0);
   const strings=(o,keys)=>{for(const key of keys)if(o[key]!=null&&!text(o[key]))fail();};
   if(!obj(d)||d.schema!==1||!obj(d.settings)||!['lb','kg'].includes(d.settings.unit)||!Array.isArray(d.history)||!Array.isArray(d.exercises))fail();
+  if(d.settings.planChoices!=null && (!obj(d.settings.planChoices)||Object.values(d.settings.planChoices).some(key=>!text(key))))fail();
   const checkItems=(items,routine=false)=>{
     if(!Array.isArray(items))fail();
     for(const i of items){
@@ -853,6 +892,8 @@ document.addEventListener('click',event=>{
   if(action==='focus-exercise'){focusExercise(itemId);return;}
   if(action==='undo-last'){undoLastSet();return;}
   if(action==='start-plan'){startWorkout('plan');return;}
+  if(action==='show-plan-picker'){showPlanPicker();return;}
+  if(action==='select-plan'){choosePlan(b.dataset.key);return;}
   if(action==='repeat-last'){repeatLastWorkout();return;}
   if(action==='start-blank'){startWorkout('blank');return;}
   if(action==='continue'){setTab('workout');return;}

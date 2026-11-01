@@ -47,6 +47,13 @@ try:
         page.evaluate("Promise.race([navigator.serviceWorker.ready.then(()=>true),new Promise((_,reject)=>setTimeout(()=>reject(Error('Service worker readiness timeout')),8000))])")
         page.reload()
         page.wait_for_function('() => navigator.serviceWorker.controller !== null')
+        print('Testing midweek routine selection',flush=True)
+        page.get_by_role('button',name='Choose workout routine').click()
+        page.locator('[data-action="select-plan"][data-key="B"]').click()
+        assert page.evaluate('state.history.length') == 0
+        page.reload()
+        page.wait_for_function('() => writerReady && !recoveryPending')
+        assert page.evaluate('suggestedPlan().key') == 'B'
         print('Testing logging', flush=True)
         page.locator('[data-action="start-plan"]').first.click()
         page.locator('[data-action="edit-set"]').first.click()
@@ -54,6 +61,11 @@ try:
         page.locator('#set-edit-reps').fill('9')
         page.locator('[data-action="save-edit-set"]').click()
         page.locator('[data-action="quick-complete"]').click()
+        page.get_by_role('button',name='Change workout routine',exact=True).click()
+        page.locator('[data-action="select-plan"][data-key="B"]').click()
+        assert page.evaluate('state.active.items[0].sets[0].done') is True
+        exercise_id=page.evaluate('state.active.items[0].exerciseId')
+        assert page.evaluate('state.active.planKey') == 'B'
         state = json.loads(page.evaluate(f'localStorage.getItem({json.dumps(key)})'))
         first = state['active']['items'][0]['sets'][0]
         assert (first['weight'], first['reps'], first['done']) == ('12.75','9',True)
@@ -121,8 +133,9 @@ try:
         other.locator('[data-tab="workout"]').click()
         other.locator('[data-action="finish"]').first.click()
         assert other.evaluate('state.history.length') == 1
-        assert other.evaluate("createItem('leg-press').sets[0].weight") == '12.75'
-        assert other.evaluate("createItem('leg-press').sets[0].reps") == '9'
+        assert other.evaluate('suggestedPlan().key') == 'C'
+        assert other.evaluate("id=>createItem(id).sets[0].weight",exercise_id) == '12.75'
+        assert other.evaluate("id=>createItem(id).sets[0].reps",exercise_id) == '9'
         original=other.evaluate('JSON.stringify(state.history)')
         other.locator('[data-tab="more"]').click()
         other.locator('[data-action="show-plan-import"]').click()
