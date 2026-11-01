@@ -1,10 +1,15 @@
-LIFTLOG V4 QUICK START
+LIFTLOG 4.1 — LOCAL WORKOUT LOGGING
 
-1. Unzip and upload all individual files to the root of https://github.com/aha121coex/liftlog (not the ZIP).
-2. GitHub repository Settings > Pages > Deploy from branch > main > /(root) > Save.
-3. In the shared Gmail account, create an OAuth WEB client in Google Cloud with JavaScript origin: https://aha121coex.github.io
-4. Enable the Google Sheets API; add aha121coex@gmail.com as a test user on the OAuth consent screen.
-5. Open https://aha121coex.github.io/liftlog/ in Safari, More > Google Sheets sync, paste the OAuth client ID, Connect Google.
-6. Once Google sync is confirmed, Safari Share > Add to Home Screen.
+Open https://aha121coex.github.io/liftlog/ in Safari.
+Tap Share > Add to Home Screen to install.
 
-Detailed steps and data safety notes are in README.md. OAuth setup is a required one-time action; it is not already connected.
+No Google account, OAuth setup, API key or subscription is required.
+Log workouts offline after the initial online installation completes.
+Use More > Share backup to send your history to ChatGPT, or save the file
+in Files and attach it manually. Import returned routine JSON in More.
+
+Export a backup before updates or switching phones. Close all old LiftLog
+windows and reopen online to activate a new version. Keep the same Home
+Screen installation and URL; do not clear Safari data to update.
+
+README.md documents backup/recovery, AGENTS.md documents development rules.

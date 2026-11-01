@@ -1,97 +1,46 @@
-# LiftLog v4 — Personal iPhone workout tracker
+# LiftLog — personal iPhone workout tracker
 
-**Status:** Complete working PWA package with Google Sheets sync implementation. Tested with a simulated Google API. The *real* Google sign-in and upload need a one-time setup; we have not verified iPhone OAuth or published this revision yet.
+LiftLog 4.1 — a local-only workout tracker. **No Google account, OAuth client or cloud sync is required.** Workouts save on your iPhone; sharing and backups happen when you choose.
 
 ## Features
 
-- One-tap completion of a set with per-set recall of the exact last weight and repetitions
-- Adjustable weight increments per exercise, plus any custom typed weight
-- Suggested routines from your full gym or travel gym, customizable routines and custom exercises
-- Local first: works offline, records sets without waiting for cloud services
-- Local secondary IndexedDB copy, downloadable JSON backup and CSV export
-- Authenticated Google Sheets synchronization of completed workouts, individual sets, exercises and routines
-- Pulls edits made to your private Google Sheet (including edits made by ChatGPT)
-- Detects a simultaneous phone-vs-Sheet edit and asks which to keep rather than silently overwriting a workout
-- Automatic online sync while signed in; short-lived Google authorization must be renewed periodically
-- Same GitHub Pages URL and iPhone Home Screen icon across future releases
+- One-tap set completion and individual-set recall, including ramp-up weights and reps
+- Exercise-specific increments in pounds and kilograms, with exact manual entry
+- Custom exercises, saved routines, recommendations, full history and progress
+- Offline local saving, an IndexedDB mirror, JSON backup/restore and CSV export
+- Routine import and workout summary sharing for ChatGPT
 
-## Your private Google Sheet
+## Share with ChatGPT
 
-https://docs.google.com/spreadsheets/d/1kqksEeg9CO4UCigEWgbBK0WldeoLzp_5Vw4TPKYHWtU/edit
+In **More → Work with ChatGPT → Share backup**, choose ChatGPT if your iPhone offers it in the share sheet. Otherwise save the JSON file to Files and attach it to your chat. The file includes your full history, custom exercises, routines, settings and current workout. Sharing does not modify the database or grant ongoing access. You can also share a short summary. Import a suggested routine using **Import a routine**; completed workouts remain unchanged.
 
-The Google Sheet belongs to `aha121coex@gmail.com` and is currently restricted. The Sheet ID appearing in this public source code is *not* an access credential. No password, access token, API key or client secret is present in this repository.
+ChatGPT cannot directly open your iPhone database. It can analyze the snapshot you attach and return a routine in LiftLog's import format. For example: “Review my workout history and return a revised routine as LiftLog routine JSON, without changing my recorded workouts.” The existing routine importer matches exercise names in your library.
 
-## Step 1 — Upload the files to GitHub (once)
+Legacy Google sync and its experimental replacement core remain disabled and outside current scope. See [SECURITY_REVIEW.md](SECURITY_REVIEW.md) for the historical review and [AGENTS.md](AGENTS.md) for current requirements.
 
-Repository: https://github.com/aha121coex/liftlog
+## Local development and checks
 
-On the iPhone, save and uncompress this ZIP in Files. Open the repository in Safari and use **Add file → Upload files**. Select the individual files **inside** the unzipped folder, not the ZIP and not the containing folder. Commit to `main`. Preserve these filenames in the repo root:
+No runtime dependencies are required. Use Node 22 or later and Python 3. After changing shipped app files, regenerate the verified release hashes:
 
-- `index.html`
-- `app.js`
-- `sync.js`
-- `styles.css`
-- `sw.js`
-- `manifest.webmanifest`
-- `icon-192.png`, `icon-512.png`, `apple-touch-icon.png`
-- `README.md`
-- `.nojekyll` (optional; iOS may hide dotfiles)
+```sh
+python3 scripts/prepare-shell.py
+npm run check
+npm test
+python -m http.server 8000
+```
 
-Don't upload workout backups or OAuth tokens to your public repository.
+Open `http://localhost:8000/`. For the optional browser smoke test, install Python Playwright and Chromium, run `npm run build`, then `python scripts/browser-smoke.py`. Use `python scripts/upgrade-smoke.py` to test the v4 upgrade against synthetic history. The smoke script also accepts `--url` for testing a published release in an isolated profile. The script uses `/usr/bin/chromium`, serves a temporary localhost site, and tests synthetic data only. It covers touch-sized logging, reload, offline operation, backup round-trip and local recovery. It does not establish physical iPhone Safari reliability.
 
-## Step 2 — Enable GitHub Pages (once)
+## Data safety
 
-From repository **Settings → Pages**, set:
-- Build and deployment source: **Deploy from a branch**
-- Branch: **main**
-- Folder: **/ (root)**
-- Save.
+The primary key remains `liftlog.personal.v1`; updates must preserve it. IndexedDB is a second copy on the same device, not an independent backup. Export JSON to Files regularly and before updates, restores or changing phones. CSV is for inspection and cannot restore the complete app.
 
-When publishing completes, the address is:
+Restore validates before replacing state, preserves the previous raw database at `liftlog.personal.v1.beforeRestore`, and removes old cloud baselines and pending deletions. Failure to save either the recovery copy or replacement aborts restore. Restore replaces rather than merges local history. Use **Download data from before last restore** to recover the preserved raw database. The recovery slot is overwritten on the next restore and removed by explicit reset.
 
-https://aha121coex.github.io/liftlog/
+Unreadable saved data opens a recovery screen instead of overwriting history. Download the raw data before restoring a known-good backup. Startup waits for the IndexedDB recovery check before accepting workout edits when the primary copy is missing. Erasing local data requires two confirmations. No remote data is changed.
 
-That URL will be stable across upgrades. We have not claimed the site is live yet.
+## Installation and updates
 
-## Step 3 — Create your free OAuth web client (once)
+The permanent address is `https://aha121coex.github.io/liftlog/`. Keep the same origin, path, manifest identity and storage keys across upgrades; do not reinstall or clear Safari data to update. Source changes are reviewed in a PR. The publishing workflow tests and builds an explicit allowlist of public app files, then deploys it through GitHub Pages. Personal workouts and backups are never part of the published artifact. Run `npm run build` to inspect the artifact in `dist/`.
 
-This is needed because GitHub Pages is public but the Google Sheet must remain private. Google itself authenticates access; LiftLog never sees your Google password.
-
-Sign in as `aha121coex@gmail.com` and open https://console.cloud.google.com/ .
-
-1. Create a project, e.g. **LiftLog**.
-2. From **APIs & Services → Library**, enable **Google Sheets API**.
-3. From **Google Auth Platform → Branding**, configure the consent screen with app name **LiftLog**. Choose **External** audience for a consumer Gmail account (Internal only works for Workspace organizations). In **Audience**, add `aha121coex@gmail.com` as a **test user**. Include Sheets access in **Data Access** if prompted.
-4. In **Google Auth Platform → Clients**, choose **Create Client → Web application**.
-5. Under **Authorized JavaScript origins**, add exactly `https://aha121coex.github.io` — **no `/liftlog` path**. No redirect URL is needed for the Google Identity Services token popup.
-6. Copy the **Client ID**, which ends in `.apps.googleusercontent.com`. It is a public identifier, **not** a secret. Never paste a client secret into the app or GitHub.
-
-Google's official documentation:
-https://developers.google.com/identity/oauth2/web/guides/use-token-model
-https://developers.google.com/workspace/sheets/api/quickstart/js
-
-## Step 4 — Connect inside LiftLog
-
-In Safari, open the LiftLog website. Tap **More → Google Sheets · two-way sync**.
-
-1. Paste the OAuth web **Client ID**.
-2. Tap **Connect Google** and select `aha121coex@gmail.com`.
-3. Approve Google Sheets access.
-4. Check for **Synced ✓**. If you see a Google authorization error, check that the OAuth client has the correct authorized origin and the shared Gmail address is listed as a test user.
-5. Try adding a sample session and confirm that a matching new row appears in the **Workouts** and **Sets** tabs. Delete this test session afterward if desired.
-
-Once it works in Safari, use **Share → Add to Home Screen**. If the Google popup is blocked in standalone iPhone mode, open the page in Safari while we troubleshoot; all lifting and offline local storage continue working.
-
-## Sync behavior and limitations
-
-- Local set logging never depends on network or sign-in. The sync *only* uploads completed workouts; unfinished workouts remain on the iPhone.
-- When the app has a valid Google access token, sync runs after local changes, on reconnect/foreground, and periodically while open. OAuth tokens expire, so this is **not** a perpetual background service; reconnect from More when asked.
-- The app compares the local copy and the Google copy against their last-synced signatures. If both changed, it displays a conflict that you must resolve. A conflict does not silently discard either edit.
-- Don't rearrange spreadsheet columns, erase stable ID columns, physically delete rows, or sort only part of a table. You may edit the weight/reps, routine/exercise values, and notes. Use the `deleted` column rather than removing a cloud workout or set row.
-- When designing new routine set weights in Google Sheets, `Routine Items` includes `set_plan_json` for per-set progression. Edit it along with `target_weight` and `target_reps` as needed.
-- Use **Export complete backup** periodically. The cloud database does not replace a separate backup.
-- This has been browser-tested with a simulated Google API, not yet deployed and verified with real Google OAuth on an iPhone.
-
-## Updating LiftLog
-
-Replace only the **app source files** in this same repository. GitHub Pages publishes an updated version at the same URL. The service worker uses a versioned cache and network-first update strategy to refresh app code without changing or erasing your locally stored workouts. Export a JSON backup before major upgrades.
+Only one LiftLog window can edit at a time. If the app reports another open window, close it and tap Try again. This requires a modern Safari version with Web Locks support. Before the first upgrade from v4, export a backup and close all old LiftLog tabs/windows, since old versions do not participate in the lock. Future updates install a verified complete shell and activate after the previous windows close, preserving saved history.

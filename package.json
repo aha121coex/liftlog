@@ -1,0 +1,11 @@
+{
+  "name": "liftlog",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.cjs",
+    "check": "node --check app.js && node --check sync.js && node --check sync-protocol.js && node --check sw.js && python3 scripts/prepare-shell.py --check",
+    "build": "python3 scripts/build-site.py",
+    "pretest": "python3 scripts/build-site.py"
+  },
+  "version": "4.1.0"
+}

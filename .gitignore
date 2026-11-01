@@ -1,0 +1,12 @@
+node_modules/
+__pycache__/
+.env
+.env.*
+*.pem
+LiftLog-backup-*.json
+LiftLog-recovery-*.json
+LiftLog-sets-*.csv
+playwright-report/
+test-results/
+dist/
+LiftLog-before-restore-*.json
