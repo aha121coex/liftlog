@@ -14,9 +14,10 @@ The intended Google integration is two-way synchronization with a private Sheet,
 
 ## Local development and checks
 
-No build step or runtime dependencies are required. Use Node 22 or later:
+No runtime dependencies are required. Use Node 22 or later and Python 3. After changing shipped app files, regenerate the verified release hashes:
 
 ```sh
+python3 scripts/prepare-shell.py
 npm run check
 npm test
 python -m http.server 8000
@@ -37,3 +38,5 @@ Unreadable saved data opens a recovery screen instead of overwriting history. Do
 The permanent intended address is `https://aha121coex.github.io/liftlog/`. Keep the same origin, path, manifest identity and storage keys across upgrades; do not reinstall or clear Safari data to update. Changes must be reviewed in a PR before any publishing step. This review does not enable Pages, modify hosting configuration or merge to main.
 
 For future OAuth setup, use a public web client ID with exact authorized origins, short-lived tokens in memory, and a tested file-specific authorization grant. Never publish client secrets, tokens, workout backups or Sheet data. The existing `spreadsheets` scope is too broad for the intended least-privilege design. A hard-coded Sheet ID does not narrow its grant.
+
+Only one LiftLog window can edit at a time. If the app reports another open window, close it and tap Try again. This requires a modern Safari version with Web Locks support. Before the first upgrade from v4, export a backup and close all old LiftLog tabs/windows, since old versions do not participate in the lock. Future updates install a verified complete shell and activate after the previous windows close, preserving saved history.

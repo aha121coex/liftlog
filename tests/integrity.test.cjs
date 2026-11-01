@@ -94,3 +94,16 @@ for(const [field,value] of [['sync','invalid'],['remotePlans',{gym:[{name:'Broke
   const d=fixture();d[field]=value;const raw=JSON.stringify(d);const h=boot(raw);await h.ready();
   assert.equal(h.run('recoveryRequired'),true);assert.equal(h.data.get(KEY),raw);
 });
+
+test('a second window cannot persist, restore or reset the database',async()=>{
+  const original=JSON.stringify(fixture());const h=boot(original,()=>false,false);await h.ready();
+  assert.equal(h.run('writerReady'),false);assert.match(h.elements.view.innerHTML,/another window/);
+  assert.equal(h.run('persist()'),false);h.restore({...fixture(),history:[]});h.run('safeReset()');
+  assert.equal(h.data.get(KEY),original);assert.equal(h.run('state.history.length'),1);
+});
+
+test('finishing a workout never claims durable success after quota failure',async()=>{
+  const d=fixture();d.active=structuredClone(d.history[0]);d.active.id='new-workout';d.history=[];
+  const h=boot(JSON.stringify(d),()=>true);await h.ready();h.run('finishWorkout()');
+  assert.equal(h.run('state.history.length'),1);assert.match(h.elements.toast.textContent,/memory only/);
+});

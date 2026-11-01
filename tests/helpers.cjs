@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const vm = require('node:vm');
 const KEY = 'liftlog.personal.v1';
-function boot(raw, failWrite = () => false) {
+function boot(raw, failWrite = () => false, writerGranted = true) {
   const data = new Map(raw === undefined ? [] : [[KEY, raw]]);
   const elements = Object.fromEntries(['view', 'sheet-root', 'toast', 'backup-file'].map(id => [id, {
     innerHTML: '', textContent: '', classList: {add(){}, remove(){}, toggle(){}}, click(){}
@@ -12,7 +12,7 @@ function boot(raw, failWrite = () => false) {
     console: {error(){}, warn(){}, info(){}},
     document: {getElementById: id => elements[id] || null, querySelectorAll: () => [],
       addEventListener: (type, fn) => {events[type] = fn;}, hidden: false},
-    window: {addEventListener(){}, scrollTo(){}}, navigator: {onLine: false}, location: {protocol: 'file:'},
+    window: {addEventListener(){}, scrollTo(){}}, navigator: {onLine: false, locks:{request(name,options,callback){callback(writerGranted?{name}:null);return Promise.resolve();}}}, location: {protocol: 'file:'},
     localStorage: {getItem: key => data.get(key) ?? null,
       setItem(key, value) {if (failWrite(key, value)) throw Error('QuotaExceededError'); data.set(key, value);},
       removeItem: key => data.delete(key)},

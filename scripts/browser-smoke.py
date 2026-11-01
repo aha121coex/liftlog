@@ -30,10 +30,10 @@ try:
         page.set_default_timeout(8000)
         print('Opening app', flush=True)
         page.goto(url)
-        page.wait_for_function('!recoveryPending')
+        page.wait_for_function('() => writerReady && !recoveryPending')
         page.evaluate("Promise.race([navigator.serviceWorker.ready.then(()=>true),new Promise((_,reject)=>setTimeout(()=>reject(Error('Service worker readiness timeout')),8000))])")
         page.reload()
-        page.wait_for_function('navigator.serviceWorker.controller !== null')
+        page.wait_for_function('() => navigator.serviceWorker.controller !== null')
         print('Testing logging', flush=True)
         page.locator('[data-action="start-plan"]').first.click()
         page.locator('[data-action="edit-set"]').first.click()
@@ -48,7 +48,7 @@ try:
         assert page.evaluate('state.active.items[0].sets[0].done') is True
         context.set_offline(True)
         page.reload()
-        page.wait_for_function('typeof state !== "undefined"')
+        page.wait_for_function('() => typeof state !== "undefined"')
         page.locator('[data-tab="workout"]').click()
         page.locator('[data-action="quick-complete"]').click()
         assert page.evaluate('state.active.items[0].sets[1].done') is True
@@ -64,7 +64,7 @@ try:
         page.evaluate('dbWriteQueue')
         page.evaluate(f'localStorage.removeItem({json.dumps(key)})')
         page.reload()
-        page.wait_for_function('!recoveryPending && state.active !== null')
+        page.wait_for_function('() => !recoveryPending && state.active !== null')
         assert page.evaluate('state.active.items[0].sets[1].done') is True
         # A corrupt primary must be preserved, with no normal logging UI.
         page.evaluate(f'localStorage.setItem({json.dumps(key)}, "{{broken")')
@@ -77,13 +77,24 @@ try:
         info.value.save_as(recovery)
         assert recovery.read_text() == '{broken'
         page.locator('#backup-file').set_input_files(backup)
-        page.wait_for_function('!recoveryRequired')
+        page.wait_for_function('() => !recoveryRequired')
         assert page.evaluate('state.active.items[0].sets[0].weight') == '12.75'
         assert page.evaluate(f'localStorage.getItem({json.dumps(key + ".beforeRestore")})') == '{broken'
         page.reload()
         assert page.evaluate('state.active.items[0].sets[0].weight') == '12.75'
+        # Same-origin windows share data; only one may hold the writer lock.
+        other = context.new_page()
+        other.goto(url)
+        other.get_by_text('LiftLog is open in another window.', exact=False).wait_for()
+        before = page.evaluate(f'localStorage.getItem({json.dumps(key)})')
+        assert other.evaluate('persist()') is False
+        assert other.evaluate(f'localStorage.getItem({json.dumps(key)})') == before
+        page.close()
+        other.reload()
+        other.wait_for_function('() => writerReady && !recoveryPending')
+        assert other.evaluate('state.active.items[0].sets[0].weight') == '12.75'
         assert not errors, errors
         browser.close()
-        print('PASS: touch viewport, exact manual entry, one-tap saves, reload, offline shell/logging, JSON round trip, IndexedDB recovery and corrupt-primary recovery')
+        print('PASS: touch viewport, exact manual entry, one-tap saves, reload, offline shell/logging, JSON round trip, IndexedDB recovery and corrupt-primary recovery; exclusive multi-window editing and lock transfer')
 finally:
     server.shutdown()

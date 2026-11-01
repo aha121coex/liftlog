@@ -19,6 +19,8 @@ let dbWriteQueue = Promise.resolve();
 let changedSinceBoot = false;
 let recoveryRequired = false;
 let recoveryPending = false;
+let writerReady = false;
+let writerMessage = 'Opening workout storage…';
 const SECONDARY_DB = 'liftlog-offline-backup';
 const SECONDARY_DB_STORE = 'snapshots';
 
@@ -153,6 +155,7 @@ async function recoverSecondaryIfNeeded() {
   finally {recoveryPending=false;render();}
 }
 function persist() {
+  if(!writerReady){toast(writerMessage,5000);return false;}
   if(recoveryRequired||recoveryPending){toast('Saved data needs recovery before saving.',6500);return false;}
   changedSinceBoot=true;
   const snapshot=deepCopy(state);
@@ -162,6 +165,7 @@ function persist() {
   // it is NOT a cloud backup and can be deleted with all Safari site data.
   dbWriteQueue=dbWriteQueue.then(()=>writeSecondary(snapshot)).catch(err=>console.warn('Second storage copy unavailable',err));
   window.LiftLogSync?.schedule();
+  return storeAvailable;
 }
 
 function toast(message,ms=2500) {
@@ -366,6 +370,7 @@ function repeatLastWorkout() {
 }
 function setTab(next) {tab=next;closeSheet();render();window.scrollTo({top:0,behavior:'instant'});}
 function render() {
+  if(!writerReady){view.innerHTML=pageShell(`<h1>Workout storage</h1><p>${esc(writerMessage)}</p><button class="button full" data-action="reload-app">Try again</button><button class="button dark full" data-action="export-recovery">Download saved data</button>`);return;}
   if(recoveryPending){view.innerHTML=pageShell('<h1>Checking saved workouts…</h1><p>Please wait while LiftLog checks the second on-device copy.</p>');return;}
   if(recoveryRequired){view.innerHTML=pageShell(`<h1>Saved data needs recovery</h1><p>LiftLog could not read the saved database. Logging is paused to protect it. Download the saved data before restoring a known-good backup.</p><div class="stack"><button class="button full" data-action="export-recovery">Download saved data</button><button class="button dark full" data-action="import-json">Restore JSON backup</button><button class="button danger" data-action="reset">Erase local data and start fresh</button></div>`);return;}
   const views={today:renderToday,workout:renderWorkout,history:renderHistory,progress:renderProgress,more:renderMore};
@@ -634,7 +639,7 @@ function finishWorkout() {
   delete record.editingId;
   if(w.editingId){const idx=state.history.findIndex(s=>s.id===w.editingId);if(idx>=0){record.id=w.editingId;state.history[idx]=record;}else state.history.push(record);}
   else state.history.push(record);
-  state.active=null;focusedSetKey=null;historyOpen=record.id;persist();setTab('history');toast(w.editingId?'Workout changes saved':'Workout saved — nice work');
+  state.active=null;focusedSetKey=null;historyOpen=record.id;const saved=persist();setTab('history');toast(saved?(w.editingId?'Workout changes saved':'Workout saved — nice work'):'Workout is in memory only — export a backup before closing',6500);
 }
 function editHistory(id) {
   const s=state.history.find(s=>s.id===id);if(!s)return;
@@ -754,10 +759,12 @@ function validateBackup(d) {
 }
 
 function importBackup(file) {
+  if(!writerReady)return;
   if(!file)return;if(file.size>8*1024*1024){toast('Backup is too large (limit: 8 MB)');return;}
   const reader=new FileReader();reader.onload=()=>{
     try {
       const imported=JSON.parse(reader.result);
+      if(!writerReady)throw Error(writerMessage);
       validateBackup(imported);
       if(!confirm(`Restore ${imported.history.length} workouts? This REPLACES everything currently stored on this device.`))return;
       // Preserve the exact old database before replacing it; failure aborts restore.
@@ -787,6 +794,7 @@ function saveCustom() {
   persist();closeSheet();render();toast('Custom exercise added');
 }
 function safeReset() {
+  if(!writerReady)return;
   if(!confirm('Erase ALL your saved workouts and custom exercises from this device? Export a backup first.'))return;
   if(!confirm('Final confirmation: this cannot be undone without a backup.'))return;
   try {
@@ -804,6 +812,8 @@ document.addEventListener('click',event=>{
   const tabButton=event.target.closest('[data-tab]');if(tabButton){setTab(tabButton.dataset.tab);return;}
   const b=event.target.closest('[data-action]');if(!b)return;
   const action=b.dataset.action,id=b.dataset.id,itemId=b.dataset.item;
+  if(action==='reload-app'){location.reload();return;}
+  if(!writerReady&&action!=='export-recovery')return;
   if(recoveryPending)return;
   if(recoveryRequired&&!['export-recovery','import-json','reset'].includes(action))return;
   if(action==='export-recovery'){exportRecovery();return;}
@@ -913,7 +923,7 @@ document.addEventListener('click',event=>{
   if(action==='reset'){safeReset();return;}
 });
 document.addEventListener('input',event=>{
-  if(recoveryRequired||recoveryPending)return;
+  if(!writerReady||recoveryRequired||recoveryPending)return;
   const target=event.target; const action=target.dataset.action;
   if(action==='exercise-search'){refreshPicker(target.value);return;}
   if(action==='set-field'){
@@ -929,7 +939,7 @@ document.addEventListener('input',event=>{
 document.addEventListener('change',event=>{
   const t=event.target;
   if(t.id==='backup-file'){importBackup(t.files?.[0]);t.value='';return;}
-  if(recoveryRequired||recoveryPending)return;
+  if(!writerReady||recoveryRequired||recoveryPending)return;
   const action=t.dataset.action;
   if(action==='progress-exercise'){progressExercise=t.value;render();return;}
   if(action==='settings-location'){state.settings.location=t.value;persist();render();return;}
@@ -942,4 +952,15 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
 }
 window.LiftLogSync?.init({getState:()=>state,persist,render,toast,tab:()=>tab,baseExercises:()=>BASE_EXERCISES});
 render();
-recoverSecondaryIfNeeded();
+// The browser releases this exclusive lock when the document closes. A second
+// Safari tab or Home Screen window must never save an independent stale snapshot.
+if(navigator.locks?.request){
+  navigator.locks.request('liftlog.personal.v1.writer',{ifAvailable:true},async lock=>{
+    if(!lock){writerMessage='LiftLog is open in another window. Close that window, then tap Try again.';render();return;}
+    writerReady=true;recoveryPending=false;state=loadState();
+    render();await recoverSecondaryIfNeeded();
+    await new Promise(()=>{});
+  }).catch(()=>{writerReady=false;writerMessage='Workout storage could not be locked. Reload LiftLog to retry.';render();});
+}else{
+  writerMessage='This browser cannot safely lock workout storage. Open LiftLog in an updated Safari browser.';render();
+}
