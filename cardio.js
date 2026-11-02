@@ -10,6 +10,11 @@ let cardioMetric='minutes';
 let cardioLogExerciseId=null;
 function isCardio(ex){return ex.category==='Cardio'&&isTimed(ex);}
 function cardioDefaults(){return {source:'manual',distance:'',distanceUnit:state.settings.unit==='kg'?'km':'mi',speed:'',speedUnit:state.settings.unit==='kg'?'km/h':'mph',incline:'',level:'',floors:'',effort:'',avgHeartRate:'',benchmark:''};}
+function cardioTemplateTargets(previous){
+  const next=cardioDefaults();
+  for(const key of ['distanceUnit','speed','speedUnit','incline','level','benchmark'])if(previous?.[key]!==undefined)next[key]=previous[key];
+  return next;
+}
 function validateCardio(c){
   if(c===undefined)return;
   const fail=()=>{throw Error('Invalid cardio measurements');};
