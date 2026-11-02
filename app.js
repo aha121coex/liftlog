@@ -279,7 +279,7 @@ function templateItems(t) {
     const count=Math.max(1,Math.min(16,spec.sets.length));
     item.sets=Array.from({length:count},(_,k)=>{
       const from=prev[k] || prev[prev.length-1] || spec.sets[k] || {};
-      return {id:uid('set'),weight:String(from.weight??''),reps:String(from.reps??exById(spec.exerciseId).defaultReps),done:false,...(isCardio(exById(spec.exerciseId))?{cardio:deepCopy(spec.sets[k]?.cardio||cardioDefaults())}:{})};
+      return {id:uid('set'),weight:String(from.weight??''),reps:String(from.reps??exById(spec.exerciseId).defaultReps),done:false,...(isCardio(exById(spec.exerciseId))?{cardio:cardioTemplateTargets(spec.sets[k]?.cardio)}:{})};
     });
     return item;
   });
@@ -338,7 +338,7 @@ function saveTemplate() {
   const name=prompt('Routine name',w.title);if(name===null)return;
   if(!name.trim()){toast('Give the routine a name');return;}
   const t={id:uid('routine'),name:name.trim().slice(0,70),location:w.location,
-    items:w.items.map(i=>({exerciseId:i.exerciseId,sets:i.sets.map(s=>({weight:s.weight,reps:s.reps,...(s.cardio?{cardio:deepCopy(s.cardio)}:{})}))})),
+    items:w.items.map(i=>({exerciseId:i.exerciseId,sets:i.sets.map(s=>({weight:s.weight,reps:s.reps,...(s.cardio?{cardio:cardioTemplateTargets(s.cardio)}:{})}))})),
     createdAt:new Date().toISOString()};
   state.templates.push(t);persist();toast('Routine saved. Start it from Today.');
 }
@@ -561,7 +561,7 @@ function undoLastSet() {
 }
 function renderMore() {
   const custom=state.exercises.filter(e=>e.custom).length;
-  return pageShell(`<div class="eyebrow">LIFTLOG 4.3 · ON THIS DEVICE</div><h1 class="page-title">Settings & backup</h1><p class="subtle margin-bottom">Your workouts save on this phone. Share a file when you want ChatGPT to review them.</p>
+  return pageShell(`<div class="eyebrow">LIFTLOG 4.3.1 · ON THIS DEVICE</div><h1 class="page-title">Settings & backup</h1><p class="subtle margin-bottom">Your workouts save on this phone. Share a file when you want ChatGPT to review them.</p>
     <div class="stack">${backupDue()?'<div class="notice warn">Backup recommended: you have new workouts saved only on this iPhone. Export your JSON backup to Files.</div>':''}<div class="card"><h2 class="section-title margin-bottom">Workout defaults</h2>
       <div class="input-row"><label for="location-select">Equipment</label><select id="location-select" data-action="settings-location"><option value="gym" ${state.settings.location==='gym'?'selected':''}>Full gym</option><option value="small" ${state.settings.location==='small'?'selected':''}>Small gym</option></select></div><div class="divider"></div>
       <div class="input-row"><label for="unit-select">Weight units</label><select id="unit-select" data-action="settings-unit"><option value="lb" ${unit()==='lb'?'selected':''}>Pounds (lb)</option><option value="kg" ${unit()==='kg'?'selected':''}>Kilograms (kg)</option></select></div><div class="divider"></div>
