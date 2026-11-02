@@ -7,6 +7,10 @@ Current user requirement: no cloud synchronization or Google OAuth setup. Keep w
 
 Preserve history across upgrades at the permanent GitHub Pages origin and `/liftlog/` path. Never require reinstalling, clearing site data or changing storage keys for an update. Backups, recovery, deletion and conflict resolution are product requirements, not optional maintenance.
 
+## Cardio requirements and implementation
+
+Read `CARDIO_DESIGN.md` before changing cardio. `cardio.js` supplies the Cardio view over the existing workout ledger, optional per-set `cardio` measurements and root `activityDays` manual step totals. These are additive schema-1 fields; do not duplicate cardio history into a second collection. Six-week volume and matched comparisons are derived, never saved as fabricated physiological data. The user wants standalone cardio and optional lifting finishers, outdoor jogs/dog walks, treadmill/stair-climber logging, and meaningful long-term trends. Separate activity volume, comparable performance benchmarks and sourced VO2 max estimates. Never infer VO2 max from steps or machine calories. Phone/watch integration is optional and requires an honest native HealthKit boundary; do not promise automatic Health access from this web app. Preserve existing history and avoid counting a linked session or daily steps twice.
+
 ## Current architecture
 - `index.html`, `styles.css`: static mobile UI; deferred classic scripts.
 - `app.js`: state, recommendations, rendering, delegated events, local persistence. Schema 1; primary key `liftlog.personal.v1`. History, exercises, templates, active session and settings are local. Active edits may share item/set IDs with a completed session.

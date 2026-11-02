@@ -52,3 +52,15 @@
 .plan-picker-title{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:4px 0;border:0;background:transparent;color:inherit;font:inherit;text-align:left;overflow-wrap:anywhere;cursor:pointer}
 .plan-picker-title:focus-visible{outline:2px solid var(--mint);outline-offset:5px;border-radius:5px}
 .picker-option[aria-pressed="true"]{border-color:var(--mint);background:#1d352b}
+/* Cardio shares the local workout ledger and has its own navigation/trends. */
+.cardio-actions{flex-wrap:wrap}
+.fast-set-values{overflow-wrap:anywhere;white-space:normal}
+#cardio-comparison{max-width:100%;font-size:13px}
+.cardio-volume-row{display:grid;grid-template-columns:82px minmax(0,1fr) 65px;gap:8px;align-items:center;margin-top:12px;font-size:11px}
+.cardio-volume-row strong{text-align:right}
+.cardio-volume-track{height:9px;background:#304048;border-radius:6px;overflow:hidden}
+.cardio-volume-track span{display:block;height:100%;background:var(--mint);border-radius:6px}
+/* Safari date/number controls must not set a grid column's minimum width. */
+.field-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.field{min-width:0}
+.field input,.field select{width:100%;min-width:0}

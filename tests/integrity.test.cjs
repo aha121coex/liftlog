@@ -62,7 +62,7 @@ test('unit conversion includes saved routine per-set weights',async()=>{
 test('cannot delete an exercise referenced by a saved routine',async()=>{
   const d=fixture();d.history=[];d.exercises[0].custom=true;const h=boot(JSON.stringify(d));await h.ready();
   const button={dataset:{action:'delete-custom',id:'e'}};h.events.click({target:{closest:s=>s==='[data-action]'?button:null}});
-  assert.equal(h.run('state.exercises.length'),1);assert.match(h.elements.toast.textContent,/routine/);
+  assert.equal(h.run("state.exercises.filter(e=>e.id==='e').length"),1);assert.match(h.elements.toast.textContent,/routine/);
 });
 
 test('CSV formula prefixes are neutralized, including whitespace and minus',async()=>{
