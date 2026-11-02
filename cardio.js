@@ -62,7 +62,7 @@ function cardioRows(){
   for(const w of state.history){
     const context=w.items.some(i=>!isCardio(exById(i.exerciseId))&&i.sets.some(s=>s.done))?'With lifting':'Cardio only';
     for(const item of w.items){const ex=exById(item.exerciseId);if(!isCardio(ex))continue;
-      for(const s of item.sets){if(!s.done)continue;const minutes=Number(s.reps)*(ex.measure==='seconds'?1/60:1);if(!Number.isFinite(minutes)||minutes<=0)continue;
+      for(const s of item.sets){if(!s.done&&!s.skipped)continue;const minutes=Number(s.reps)*(ex.measure==='seconds'?1/60:1);if(!Number.isFinite(minutes)||minutes<=0)continue;
         const c=s.cardio||{};rows.push({id:JSON.stringify([w.id,item.id,s.id]),workoutId:w.id,date:w.date,startedAt:w.startedAt||'',context,ex,c,minutes,distanceKm:c.distance!==undefined&&c.distance!==''?Number(c.distance)*(c.distanceUnit==='mi'?1.609344:1):null});
       }
     }
@@ -72,13 +72,13 @@ function cardioRows(){
 function cardioMinutesFor(w){return w.items.reduce((total,i)=>total+(isCardio(exById(i.exerciseId))?i.sets.filter(s=>s.done).reduce((n,s)=>n+(Number(s.reps)||0)*(exById(i.exerciseId).measure==='seconds'?1/60:1),0):0),0);}
 function sessionSummary(w){const strength=w.items.filter(i=>!isCardio(exById(i.exerciseId))).reduce((n,i)=>n+i.sets.filter(s=>s.done).length,0),minutes=cardioMinutesFor(w);return [strength?`${strength} sets`:'',minutes?`${fmtWeight(minutes)} min cardio`:''].filter(Boolean).join(' · ')||'No completed entries';}
 function showCardioPicker(logOnly=false){
-  showSheet(`<div class="sheet-top"><div><h2 class="sheet-title">${logOnly?'Log a separate cardio session':state.active?'Add cardio to this workout':'Choose cardio'}</h2><p class="subtle">${state.active?'Your lifting sets stay saved.':'Record a walk, jog or gym session without advancing A/B/C.'} Times are editable; only completed entries count.</p></div><button class="micro-btn" data-action="close-sheet" aria-label="Close">✕</button></div><div class="picker-options">${state.exercises.filter(isCardio).map(e=>`<button class="picker-option" data-action="${logOnly?'log-cardio':'select-cardio'}" data-id="${esc(e.id)}"><div><strong>${esc(e.name)}</strong><span>${esc(recentSummary(e.id))}</span></div><span aria-hidden="true">＋</span></button>`).join('')}</div>`);
+  showSheet(`<div class="sheet-top"><div><h2 class="sheet-title">${logOnly?'Log a separate cardio session':state.active?'Add cardio to this workout':'Choose cardio'}</h2><p class="subtle">${state.active?'Your lifting sets stay saved.':'Record a walk, jog or gym session without advancing your workout sequence.'} Times are editable; only completed entries count.</p></div><button class="micro-btn" data-action="close-sheet" aria-label="Close">✕</button></div><div class="picker-options">${state.exercises.filter(isCardio).map(e=>`<button class="picker-option" data-action="${logOnly?'log-cardio':'select-cardio'}" data-id="${esc(e.id)}"><div><strong>${esc(e.name)}</strong><span>${esc(recentSummary(e.id))}</span></div><span aria-hidden="true">＋</span></button>`).join('')}</div>`);
 }
 function addCardio(id){
   const ex=exById(id);if(!isCardio(ex))return;
-  let item=state.active?.items.find(i=>i.exerciseId===id&&i.sets.some(s=>!s.done));
+  let item=state.active?.items.find(i=>i.exerciseId===id&&i.sets.some(s=>!s.done&&!s.skipped));
   if(!item){item=createItem(id);if(state.active)state.active.items.push(item);else state.active={id:uid('workout'),date:localDate(),startedAt:new Date().toISOString(),endedAt:null,title:ex.name+' · cardio',planKey:null,location:state.settings.location,notes:'',restUntil:null,editingId:null,items:[item]};}
-  const set=item.sets.find(s=>!s.done);focusedSetKey=`${item.id}:${set.id}`;lastSetAction=null;state.active.restUntil=null;persist();setTab('workout');
+  const set=item.sets.find(s=>!s.done&&!s.skipped);focusedSetKey=`${item.id}:${set.id}`;lastSetAction=null;state.active.restUntil=null;persist();setTab('workout');
 }
 function showSeparateCardioLog(id){
   const ex=exById(id);if(!isCardio(ex))return;cardioLogExerciseId=id;

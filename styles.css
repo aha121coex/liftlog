@@ -64,3 +64,12 @@
 .field-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 .field{min-width:0}
 .field input,.field select{width:100%;min-width:0}
+
+/* Two-week program prescriptions and explicit omitted work. */
+.program-guidance summary { cursor:pointer; font-weight:700; }
+.program-guidance li { margin:12px 0; line-height:1.5; }
+.program-guidance ul { padding-left:20px; }
+.fast-set-row.skipped { opacity:.65; }
+.exercise-bottom { flex-wrap:wrap; }
+.mini-row > .subtle { text-align:right; max-width:45%; overflow-wrap:anywhere; }
+.note-inline input { max-width:100%; min-width:0; }

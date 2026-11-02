@@ -13,7 +13,7 @@ function worker(corrupt=false){
   return {handlers,stored,get removed(){return removed;},get fetches(){return fetches;}};
 }
 test('shell installs only when every asset matches its release hash',async()=>{
-  const w=worker();let installed;w.handlers.install({waitUntil:p=>installed=p});await installed;assert.equal(w.stored.size,9);
+  const w=worker();let installed;w.handlers.install({waitUntil:p=>installed=p});await installed;assert.equal(w.stored.size,10);
   const count=w.fetches;let result;w.handlers.fetch({request:{url:'https://example.test/liftlog/app.js',method:'GET',mode:'cors'},respondWith:p=>result=p});
   assert.equal(await (await result).text(),fs.readFileSync('app.js','utf8'));assert.equal(w.fetches,count);
 });
