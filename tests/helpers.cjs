@@ -20,7 +20,7 @@ function boot(raw, failWrite = () => false, writerGranted = true) {
     setTimeout(){}, clearTimeout(){}, setInterval(){}, confirm: () => true,
     FileReader: class { readAsText(file) {this.result = file.text; this.onload();} }
   });
-  for (const path of ['app.js']) vm.runInContext(fs.readFileSync(path, 'utf8'), context, {filename: path});
+  for (const path of ['cardio.js','app.js']) vm.runInContext(fs.readFileSync(path, 'utf8'), context, {filename: path});
   context.capture = (...args) => downloads.push(args);
   vm.runInContext('downloadBlob = capture;', context);
   return {context, data, elements, events, downloads, run: code => vm.runInContext(code, context),

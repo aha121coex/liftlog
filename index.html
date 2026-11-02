@@ -5,7 +5,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'self'; object-src 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="application-version" content="4.2.0">
+  <meta name="application-version" content="4.3.0">
   <meta name="theme-color" content="#0d141a">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -33,6 +33,7 @@
       <button type="button" data-tab="workout" class="nav-item" aria-label="Workout">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10v4M6 7v10M18 7v10M21 10v4M6 12h12M9 7v10M15 7v10"/></svg><span>Workout</span>
       </button>
+<button type="button" data-tab="cardio" class="nav-item" aria-label="Cardio"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span>Cardio</span></button>
       <button type="button" data-tab="history" class="nav-item" aria-label="History">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18M7.5 15h3M7.5 18h6"/></svg><span>History</span>
       </button>
@@ -47,6 +48,7 @@
   <div id="sheet-root" class="sheet-root" aria-live="off"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <input type="file" id="backup-file" accept=".json,application/json" hidden>
+  <script src="./cardio.js" defer></script>
   <script src="./app.js" defer></script>
 </body>
 </html>

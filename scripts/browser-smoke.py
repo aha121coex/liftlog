@@ -153,6 +153,72 @@ try:
         assert other.evaluate('JSON.stringify(state.history)') == original
         assert other.evaluate("state.exercises.some(e=>e.name==='My custom press')")
         assert other.evaluate('document.documentElement.scrollWidth <= innerWidth'), 'Horizontal overflow at iPhone width'
+        print('Testing cardio without a watch',flush=True)
+        other.on('pageerror',lambda error:errors.append(str(error)))
+        other.locator('[data-tab="cardio"]').click()
+        other.locator('[data-action="cardio-picker"]').click()
+        other.locator('[data-action="select-cardio"][data-id="dog-walk"]').click()
+        assert other.evaluate('state.active.planKey') is None
+        other.locator('[data-action="edit-set"]').first.click()
+        assert other.locator('#set-edit-weight').count() == 0
+        other.locator('#set-edit-reps').fill('22.5')
+        other.locator('#cardio-distance').fill('1.1')
+        other.locator('#cardio-effort').fill('3')
+        other.locator('details').locator('summary').click()
+        other.locator('#cardio-benchmark').fill('Dog park loop')
+        other.locator('[data-action="save-edit-set"]').click()
+        other.reload()
+        other.wait_for_function('()=>writerReady&&!recoveryPending')
+        other.locator('[data-tab="workout"]').click()
+        assert other.evaluate('state.active.items[0].sets[0].cardio.distance') == '1.1'
+        other.locator('[data-action="quick-complete"]').click()
+        assert other.evaluate('state.active.restUntil') is None
+        other.locator('[data-action="finish"]').first.click()
+        assert other.evaluate('suggestedPlan().key') == 'C'
+        other.locator('[data-tab="cardio"]').click()
+        other.locator('#steps-count').fill('6000')
+        other.locator('[data-action="save-steps"]').click()
+        assert other.evaluate('state.activityDays[0].steps') == 6000
+        assert other.evaluate('cardioRows().length') == 1
+        # Log the same route again and ensure a real comparison is available.
+        other.locator('[data-action="cardio-picker"]').click()
+        other.locator('[data-action="select-cardio"][data-id="dog-walk"]').click()
+        other.locator('[data-action="edit-set"]').first.click()
+        other.locator('#set-edit-reps').fill('21')
+        other.locator('#cardio-distance').fill('1.1')
+        other.locator('details').locator('summary').click()
+        other.locator('#cardio-benchmark').fill('Dog park loop')
+        other.locator('[data-action="save-edit-set"]').click()
+        other.locator('[data-action="quick-complete"]').click()
+        other.locator('[data-action="finish"]').first.click()
+        other.locator('[data-tab="cardio"]').click()
+        other.locator('#cardio-metric').select_option('pace')
+        assert other.locator('svg[aria-label="min/km over comparable cardio sessions"]').count() == 1
+        assert other.evaluate('cardioRows().length') == 2
+        other.set_viewport_size({'width':320,'height':700})
+        assert other.evaluate('document.documentElement.scrollWidth <= innerWidth'), 'Cardio overflow at narrow iPhone width'
+        other.set_viewport_size({'width':390,'height':844})
+        # A separate walk must not replace an unfinished lifting session.
+        other.locator('[data-tab="today"]').click()
+        other.locator('[data-action="start-plan"]').first.click()
+        active_lift=other.evaluate('JSON.stringify(state.active)')
+        other.locator('[data-tab="cardio"]').click()
+        other.locator('[data-action="cardio-log-picker"]').click()
+        other.locator('[data-action="log-cardio"][data-id="walk"]').click()
+        other.locator('#cardio-log-duration').fill('31.5')
+        other.locator('[data-action="save-cardio-log"]').click()
+        assert other.evaluate('JSON.stringify(state.active)') == active_lift
+        assert other.evaluate('cardioRows().length') == 3
+        # Cardio and daily steps are part of the same complete backup.
+        other.locator('[data-tab="more"]').click()
+        with other.expect_download() as info:
+            other.locator('[data-action="share-backup"]').click()
+        cardio_backup=Path(tmp)/'cardio.json'
+        info.value.save_as(cardio_backup)
+        assert json.loads(cardio_backup.read_text())['activityDays'][0]['steps'] == 6000
+        other.locator('#backup-file').set_input_files(cardio_backup)
+        other.wait_for_function('()=>state.activityDays.length===1')
+        assert other.evaluate('cardioRows().length') == 3
         assert set(hosts) == {urlsplit(url).netloc}, 'Unexpected external requests: '+str(hosts)
         assert not errors, errors
         browser.close()

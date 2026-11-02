@@ -1,6 +1,6 @@
 'use strict';
 
-// LiftLog v4.2: local-first one-tap training and user-initiated file sharing.
+// LiftLog v4.3: local-first one-tap training and user-initiated file sharing.
 const STORAGE_KEY = 'liftlog.personal.v1';
 const view = document.getElementById('view');
 const sheetRoot = document.getElementById('sheet-root');
@@ -54,7 +54,7 @@ const BASE_EXERCISES = [
   ['stair-climber','Stair climber','Cardio','Cardio','minutes',1,10,0],
   ['bike','Stationary bike','Cardio','Cardio','minutes',1,15,0],
   ['plank','Plank','Core','Bodyweight','seconds',3,30,0]
-].map(([id,name,category,equipment,measure,defaultSets,defaultReps,increment]) => ({id,name,category,equipment,measure,defaultSets,defaultReps,increment,custom:false}));
+].map(([id,name,category,equipment,measure,defaultSets,defaultReps,increment]) => ({id,name,category,equipment,measure,defaultSets,defaultReps,increment,custom:false})).concat(CARDIO_CATALOG);
 
 const PLANS = {
   gym: [
@@ -91,7 +91,7 @@ function weightStep(ex) {
 function stepLabel(ex) {return `±${fmtWeight(weightStep(ex))} ${unit()}`;}
 
 function deepCopy(value) { return JSON.parse(JSON.stringify(value)); }
-function emptyState() { return {schema:1,exercises:deepCopy(BASE_EXERCISES),history:[],active:null,templates:[],settings:{planChoices:{},unit:'lb',location:'gym',restSeconds:90,sessionMinutes:45,lastBackupWorkoutCount:0,lastBackupAt:null},createdAt:new Date().toISOString()}; }
+function emptyState() { return {schema:1,exercises:deepCopy(BASE_EXERCISES),history:[],active:null,templates:[],activityDays:[],settings:{planChoices:{},unit:'lb',location:'gym',restSeconds:90,sessionMinutes:45,lastBackupWorkoutCount:0,lastBackupAt:null},createdAt:new Date().toISOString()}; }
 function hydrateState(d) {
   d.settings = {...emptyState().settings,...(d.settings || {})};
   d.settings.planChoices = {...(d.settings.planChoices || {})};
@@ -100,7 +100,7 @@ function hydrateState(d) {
   if(!['lb','kg'].includes(d.settings.unit)) d.settings.unit='lb';
   if(!['gym','small'].includes(d.settings.location)) d.settings.location='gym';
   if(!Array.isArray(d.active?.items) && d.active) d.active=null;
-  return d;
+  return hydrateCardio(d);
 }
 function loadState() {
   try {
@@ -194,6 +194,7 @@ function historyExercise(exId) {
 function recentSummary(exId) {
   const recent=historyExercise(exId); if(!recent) return 'No previous sets yet';
   const ex=exById(exId);
+  if(isCardio(ex)) return 'Last: '+recent.sets.map(s=>cardioSetSummary(s,ex)).join(' / ');
   if(isTimed(ex)) return `Last: ${recent.sets.map(s=>`${s.reps || '–'} ${ex.measure}`).join(', ')}`;
   const show=recent.sets.slice(0,3).map(s=>`${s.weight !== '' ? s.weight : 'BW'} × ${s.reps || '–'}`);
   return `Last: ${show.join('  ·  ')} ${unit()}`;
@@ -216,7 +217,7 @@ function createItem(exId) {
   const count=previous.length?Math.min(16,previous.length):(ex.defaultSets || 3);
   const sets=Array.from({length:count},(_,i)=>{
     const old=previous[i] || previous[previous.length-1] || null;
-    return {id:uid('set'),weight:old?String(old.weight??''):'',reps:old?String(old.reps??ex.defaultReps):String(ex.defaultReps),done:false};
+    return {id:uid('set'),weight:old?String(old.weight??''):'',reps:old?String(old.reps??ex.defaultReps):String(ex.defaultReps),done:false,...(isCardio(ex)?{cardio:cardioDefaults()}:{})};
   });
   return {id:uid('item'),exerciseId:exId,note:'',sets};
 }
@@ -235,14 +236,14 @@ function getFocusedSet() {
 function renderQuickPanel() {
   const current=getFocusedSet();
   if(!current)return `<div class="quick-panel all-done"><div class="quick-eyebrow">ALL SETS CHECKED</div><strong>Workout ready to finish</strong><p>Want another set? Add one under an exercise below.</p><div class="row margin-bottom"><button class="button dark sm" data-action="undo-last">↶ Undo last set</button><button class="button dark sm" data-action="jump-exercise">Jump to exercise</button></div><button class="button full" data-action="finish">Finish & save ✓</button></div>`;
-  const {item,set,index}=current,ex=exById(item.exerciseId),timed=isTimed(ex);
+  const {item,set,index}=current,ex=exById(item.exerciseId),timed=isTimed(ex),cardio=isCardio(ex);
   const haveWeight=set.weight!==''&&set.weight!==null;
   const measure=timed?ex.measure:'reps';
   return `<section class="quick-panel" aria-label="One-tap next set">
     <div class="quick-actions"><button class="tiny-action" data-action="jump-exercise">☰ Change exercise</button><button class="tiny-action" data-action="undo-last" ${lastDoneSet()?'':'disabled'}>↶ Undo last set</button></div>
-    <div class="quick-eyebrow">NEXT SET · ${item.sets.filter(s=>s.done).length}/${item.sets.length} COMPLETED IN EXERCISE</div>
+    <div class="quick-eyebrow">${cardio?'CARDIO BLOCK':'NEXT SET'} · ${item.sets.filter(s=>s.done).length}/${item.sets.length} COMPLETED IN EXERCISE</div>
     <div class="quick-name">${esc(ex.name)}</div>
-    <div class="quick-caption">Set ${index+1} of ${item.sets.length} · ${esc(recentSummary(ex.id))}</div>
+    <div class="quick-caption">${cardio?'Block':'Set'} ${index+1} of ${item.sets.length} · ${esc(recentSummary(ex.id))}</div>
     <div class="quick-meters">
       ${!timed?`<div class="quick-meter"><span class="quick-label">WEIGHT · ${esc(unit())}</span>
         <div class="quick-meter-controls"><button data-action="quick-adjust" data-field="weight" data-delta="-1" aria-label="Decrease weight by ${esc(weightStep(ex))} ${esc(unit())}">−</button>
@@ -253,7 +254,7 @@ function renderQuickPanel() {
       <button class="quick-value" data-action="edit-set" data-item="${esc(item.id)}" data-set="${esc(set.id)}" aria-label="Type exact weight and reps">${esc(set.reps || '—')}</button>
       <button data-action="quick-adjust" data-field="reps" data-delta="1" aria-label="Increase ${esc(measure)}">+</button></div></div>
     </div>
-    <button class="quick-complete" data-action="quick-complete" aria-label="Complete ${esc(ex.name)} set ${index+1}">✓ &nbsp; Complete set</button>
+    <button class="quick-complete" data-action="quick-complete" aria-label="Complete ${esc(ex.name)} set ${index+1}">✓ &nbsp; ${cardio?'Log cardio block':'Complete set'}</button>
     <div class="quick-footer"><span>${timed?esc(ex.measure):esc(ex.equipment==='Dumbbells'?'Weight per dumbbell / hand':'Use the same weight convention each time')}</span><button data-action="edit-set" data-item="${esc(item.id)}" data-set="${esc(set.id)}">Type values</button></div>
   </section>`;
 }
@@ -278,7 +279,7 @@ function templateItems(t) {
     const count=Math.max(1,Math.min(16,spec.sets.length));
     item.sets=Array.from({length:count},(_,k)=>{
       const from=prev[k] || prev[prev.length-1] || spec.sets[k] || {};
-      return {id:uid('set'),weight:String(from.weight??''),reps:String(from.reps??exById(spec.exerciseId).defaultReps),done:false};
+      return {id:uid('set'),weight:String(from.weight??''),reps:String(from.reps??exById(spec.exerciseId).defaultReps),done:false,...(isCardio(exById(spec.exerciseId))?{cardio:deepCopy(spec.sets[k]?.cardio||cardioDefaults())}:{})};
     });
     return item;
   });
@@ -323,8 +324,9 @@ function importSuggestedPlan() {
     const sets=[];
     for(const x of raw.sets){
       const w=Number(x?.weight??0),r=Number(x?.reps);
-      if(!Number.isFinite(w)||w<0||w>2000||!Number.isInteger(r)||r<1||r>10000){toast('Invalid weight or reps in '+ex.name);return;}
-      sets.push({weight:isTimed(ex)?'':String(w),reps:String(r)});
+      if(!Number.isFinite(w)||w<0||w>2000||(!isTimed(ex)&&!Number.isInteger(r))||!Number.isFinite(r)||r<1||r>10000){toast('Invalid weight or reps in '+ex.name);return;}
+      if(x.cardio!==undefined){try{validateCardio(x.cardio);}catch(err){toast(err.message);return;}}
+      sets.push({weight:isTimed(ex)?'':String(w),reps:String(r),...(isCardio(ex)&&x.cardio?{cardio:deepCopy(x.cardio)}:{})});
     }
     specs.push({exerciseId:ex.id,sets});
   }
@@ -336,7 +338,7 @@ function saveTemplate() {
   const name=prompt('Routine name',w.title);if(name===null)return;
   if(!name.trim()){toast('Give the routine a name');return;}
   const t={id:uid('routine'),name:name.trim().slice(0,70),location:w.location,
-    items:w.items.map(i=>({exerciseId:i.exerciseId,sets:i.sets.map(s=>({weight:s.weight,reps:s.reps}))})),
+    items:w.items.map(i=>({exerciseId:i.exerciseId,sets:i.sets.map(s=>({weight:s.weight,reps:s.reps,...(s.cardio?{cardio:deepCopy(s.cardio)}:{})}))})),
     createdAt:new Date().toISOString()};
   state.templates.push(t);persist();toast('Routine saved. Start it from Today.');
 }
@@ -404,7 +406,7 @@ function repeatLastWorkout() {
     title:prior.title,planKey:prior.planKey||null,location:prior.location||state.settings.location,
     notes:'',restUntil:null,editingId:null,items:prior.items.map(i=>({
       id:uid('item'),exerciseId:i.exerciseId,note:i.note||'',
-      sets:i.sets.filter(s=>s.done).map(s=>({id:uid('set'),weight:String(s.weight??''),reps:String(s.reps??''),done:false}))
+      sets:i.sets.filter(s=>s.done).map(s=>({id:uid('set'),weight:String(s.weight??''),reps:String(s.reps??''),done:false,...(isCardio(exById(i.exerciseId))?{cardio:cardioDefaults()}:{})}))
     })).filter(i=>i.sets.length)};
   focusedSetKey=null;persist();setTab('workout');
 }
@@ -413,7 +415,7 @@ function render() {
   if(!writerReady){view.innerHTML=pageShell(`<h1>Workout storage</h1><p>${esc(writerMessage)}</p><button class="button full" data-action="reload-app">Try again</button><button class="button dark full" data-action="export-recovery">Download saved data</button>`);return;}
   if(recoveryPending){view.innerHTML=pageShell('<h1>Checking saved workouts…</h1><p>Please wait while LiftLog checks the second on-device copy.</p>');return;}
   if(recoveryRequired){view.innerHTML=pageShell(`<h1>Saved data needs recovery</h1><p>LiftLog could not read the saved database. Logging is paused to protect it. Download the saved data before restoring a known-good backup.</p><div class="stack"><button class="button full" data-action="export-recovery">Download saved data</button><button class="button dark full" data-action="import-json">Restore JSON backup</button><button class="button danger" data-action="reset">Erase local data and start fresh</button></div>`);return;}
-  const views={today:renderToday,workout:renderWorkout,history:renderHistory,progress:renderProgress,more:renderMore};
+  const views={today:renderToday,workout:renderWorkout,history:renderHistory,progress:renderProgress,more:renderMore,cardio:renderCardio};
   view.innerHTML=(views[tab] || renderToday)();
   document.querySelectorAll('[data-tab]').forEach(btn=>{
     const active=btn.dataset.tab===tab;btn.classList.toggle('active',active);
@@ -426,7 +428,7 @@ function metrics() {
   const now=Date.now(),weekAgo=now-7*86400000,monthAgo=now-30*86400000;
   const recent=state.history.filter(s => (new Date(s.endedAt || s.date+'T12:00:00').getTime() || 0)>=weekAgo);
   const month=state.history.filter(s => (new Date(s.endedAt || s.date+'T12:00:00').getTime() || 0)>=monthAgo);
-  return {week:recent.length,month:month.length,sets:month.reduce((n,s)=>n+doneSets(s).length,0)};
+  return {week:recent.length,month:month.length,sets:month.reduce((n,s)=>n+s.items.filter(i=>!isCardio(exById(i.exerciseId))).reduce((m,i)=>m+i.sets.filter(x=>x.done).length,0),0)};
 }
 function renderMetrics(){const m=metrics();return `<div class="kpi-grid"><div class="kpi"><strong>${m.week}</strong><span>Sessions / 7d</span></div><div class="kpi"><strong>${m.month}</strong><span>Sessions / 30d</span></div><div class="kpi"><strong>${m.sets}</strong><span>Sets / 30d</span></div></div>`;}
 function renderToday() {
@@ -440,6 +442,7 @@ function renderToday() {
     <p>${esc(isActive?'Your sets are saved as you go. Jump right back in.':plan.description)}</p>
     <div class="hero-actions"><button class="button" data-action="${isActive?'continue':'start-plan'}">${isActive?'Continue workout':'Start workout '+esc(plan.key)} <span aria-hidden="true">→</span></button>
     ${!isActive?'<button class="button dark" data-action="start-blank">Start blank</button>':'<button class="button dark" data-action="show-plan-picker" aria-haspopup="dialog">Change routine</button>'}</div></div>
+    <div class="card margin-top"><div class="row"><h2 class="section-title">Cardio</h2><button class="button dark sm" data-action="nav" data-value="cardio">View cardio →</button></div><p class="subtle margin-top-sm">Dog walks, jogs and gym cardio. Log separately or add to a lift; A/B/C stays on track.</p><button class="button dark full margin-top-sm" data-action="cardio-picker">${isActive?'＋ Add cardio to this workout':'＋ Start cardio'}</button></div>
     ${!isActive && state.templates.length?`<div class="section-heading"><h2 class="section-title">Your routines</h2></div><div class="card routines-list">${state.templates.map(t=>`<div class="routine-row"><div class="grow"><strong>${esc(t.name)}</strong><div class="subtle small">${t.items.length} exercises · ${esc(t.location==='small'?'Travel gym':'Full gym')}</div></div><button class="button sm" data-action="start-template" data-id="${esc(t.id)}">Start</button><button class="micro-btn" data-action="delete-template" data-id="${esc(t.id)}" aria-label="Delete ${esc(t.name)}">✕</button></div>`).join('')}</div>`:''}
     <div class="section-heading"><h2 class="section-title">Your week</h2><span class="subtle">Last 7–30 days</span></div>${renderMetrics()}
     <div class="section-heading"><h2 class="section-title">Workout setup</h2></div>
@@ -449,19 +452,19 @@ function renderToday() {
       ${!isActive?`<div class="mini-list margin-top">${planExercises(plan).map((id,idx)=>`<div class="mini-row"><div class="row gap8"><span class="marker">${idx+1}</span><span class="mini-label">${esc(exById(id).name)}</span></div><span class="subtle tiny">${esc(exById(id).category)}</span></div>`).join('')}</div>`:'<p class="subtle margin-top-sm">Changing this selects equipment for your next new workout; your current workout is unchanged.</p>'}
     </div>
     <div class="section-heading"><h2 class="section-title">Last completed</h2><button class="button linkish" data-action="nav" data-value="history">View history →</button></div>
-    ${last?`<div class="card"><div class="row"><div><strong>${esc(last.title)}</strong><div class="subtle margin-top-sm">${formatDate(last.date)} · ${statsFor(last).sets} completed sets</div></div><button class="button dark sm" data-action="repeat-last">Repeat this</button></div></div>`:
+    ${last?`<div class="card"><div class="row"><div><strong>${esc(last.title)}</strong><div class="subtle margin-top-sm">${formatDate(last.date)} · ${esc(sessionSummary(last))}</div></div><button class="button dark sm" data-action="repeat-last">Repeat this</button></div></div>`:
       '<div class="empty"><div class="empty-icon">↗</div><strong>Your first workout starts here</strong><p>No fabricated history. Your real progress will appear after your first saved session.</p></div>'}`);
 }
 function renderWorkout() {
   const w=state.active;
-  if(!w) return pageShell(`<div class="eyebrow">WORKOUT</div><h1 class="page-title">Ready when you are.</h1><p class="subtle">Start a planned full-body session or build a workout from scratch.</p><div class="stack margin-top"><button class="button full" data-action="start-plan">Start ${esc(suggestedPlan().name)}</button><button class="button dark full" data-action="show-plan-picker" aria-haspopup="dialog">Choose routine</button><button class="button dark full" data-action="start-blank">Start blank workout</button></div>`);
+  if(!w) return pageShell(`<div class="eyebrow">WORKOUT</div><h1 class="page-title">Ready when you are.</h1><p class="subtle">Start a planned full-body session or build a workout from scratch.</p><div class="stack margin-top"><button class="button full" data-action="start-plan">Start ${esc(suggestedPlan().name)}</button><button class="button dark full" data-action="show-plan-picker" aria-haspopup="dialog">Choose routine</button><button class="button dark full" data-action="cardio-picker">Start cardio</button><button class="button dark full" data-action="start-blank">Start blank workout</button></div>`);
   const count=doneSets(w).length;const total=w.items.reduce((n,i)=>n+i.sets.length,0);
-  return pageShell(`<div class="workout-head"><div class="grow"><div class="eyebrow">${w.editingId?'EDITING SAVED WORKOUT':'ACTIVE WORKOUT'}</div><h1 class="page-title"><button class="plan-picker-title" data-action="show-plan-picker" aria-label="Change workout routine" aria-haspopup="dialog">${esc(w.title)} <span aria-hidden="true">⌄</span></button></h1><div class="subtle">${formatDate(w.date)} · ${count}/${total} sets completed</div></div>
+  return pageShell(`<div class="workout-head"><div class="grow"><div class="eyebrow">${w.editingId?'EDITING SAVED WORKOUT':'ACTIVE WORKOUT'}</div><h1 class="page-title"><button class="plan-picker-title" data-action="show-plan-picker" aria-label="Change workout routine" aria-haspopup="dialog">${esc(w.title)} <span aria-hidden="true">⌄</span></button></h1><div class="subtle">${formatDate(w.date)} · ${count}/${total} entries completed</div></div>
   <button class="button dark sm" data-action="edit-meta">Edit details</button></div>
-  <div class="badges session-badges"><span class="chip green">${esc(w.location==='gym'?'Full gym':'Small gym')}</span><span class="chip">${esc(unit())} weights</span>${w.planKey?`<span class="chip">Workout ${esc(w.planKey)}</span>`:''}</div>
+  <div class="badges session-badges"><span class="chip green">${esc(w.location==='gym'?'Full gym':'Small gym')}</span>${w.items.some(i=>!isTimed(exById(i.exerciseId)))?`<span class="chip">${esc(unit())} weights</span>`:''}${w.planKey?`<span class="chip">Workout ${esc(w.planKey)}</span>`:''}</div>
   ${renderQuickPanel()}
   ${w.restUntil && w.restUntil>Date.now()?`<div class="rest-banner" id="rest-banner"><div><div class="eyebrow">REST TIMER</div><strong id="rest-countdown">${formatCountdown(w.restUntil-Date.now())}</strong></div><button class="button dark sm" data-action="skip-rest">Skip rest</button></div>`:''}
-  <div class="row margin-bottom"><h2 class="section-title">Exercises</h2><button class="button mint-outline sm" data-action="pick-exercise">+ Add exercise</button></div>
+  <div class="row margin-bottom cardio-actions"><h2 class="section-title">Exercises</h2><button class="button dark sm" data-action="cardio-picker">+ Cardio</button><button class="button mint-outline sm" data-action="pick-exercise">+ Add exercise</button></div>
   ${w.items.length?w.items.map((item,index)=>renderExerciseCard(item,index)).join(''):'<div class="empty"><strong>No exercises yet</strong><p>Tap “Add exercise” to build this workout.</p><button class="button sm" data-action="pick-exercise">+ Add exercise</button></div>'}
   ${w.items.length?`<button class="button dark full margin-top-sm" data-action="pick-exercise">+ Add another exercise</button>`:''}
   <div class="card margin-top"><div class="row"><div><strong>Session notes</strong><div class="subtle small">How did it feel? Anything worth remembering?</div></div></div>
@@ -473,11 +476,11 @@ function renderExerciseCard(item,index) {
   return `<article class="exercise-card" data-item="${esc(item.id)}"><div class="exercise-top"><div class="row start"><span class="exercise-index">${index+1}</span><div class="grow"><button class="focus-exercise-title exercise-name" data-action="focus-exercise" data-item="${esc(item.id)}" aria-label="Log ${esc(ex.name)} next">${esc(ex.name)} ↗</button><div class="exercise-sub">${esc(ex.category)} · ${esc(ex.equipment)}${timed?' · '+esc(ex.measure):''}</div></div>
   <div class="exercise-options"><button class="micro-btn" aria-label="Move ${esc(ex.name)} up" data-action="move-up" data-item="${esc(item.id)}" ${index===0?'disabled':''}>↑</button><button class="micro-btn" aria-label="Move ${esc(ex.name)} down" data-action="move-down" data-item="${esc(item.id)}" ${index===state.active.items.length-1?'disabled':''}>↓</button><button class="micro-btn" aria-label="More options for ${esc(ex.name)}" data-action="exercise-menu" data-item="${esc(item.id)}">⋯</button></div></div></div>
   <div class="exercise-hint">${esc(recentSummary(ex.id))}</div>
-  <div class="fast-set-heading"><span>SET</span><span>WEIGHT / REPS · TAP TO EDIT</span><span>DONE</span></div>
+  <div class="fast-set-heading"><span>${isCardio(ex)?'BLOCK':'SET'}</span><span>${isCardio(ex)?'DURATION / DETAILS':'WEIGHT / REPS'} · TAP TO EDIT</span><span>DONE</span></div>
   ${item.sets.map((set,i)=>`<div class="fast-set-row ${set.done?'done':''}"><span class="fast-set-number">${i+1}</span>
-  <button class="fast-set-values" data-action="edit-set" data-item="${esc(item.id)}" data-set="${esc(set.id)}" aria-label="Edit ${esc(ex.name)} set ${i+1}">${timed?`${esc(set.reps||'—')} ${esc(ex.measure)}`:`${esc(set.weight===''?'—':set.weight)} ${esc(unit())} <span class="fast-mult">×</span> ${esc(set.reps||'—')}`}</button>
+  <button class="fast-set-values" data-action="edit-set" data-item="${esc(item.id)}" data-set="${esc(set.id)}" aria-label="Edit ${esc(ex.name)} set ${i+1}">${isCardio(ex)?esc(cardioSetSummary(set,ex)):timed?`${esc(set.reps||'—')} ${esc(ex.measure)}`:`${esc(set.weight===''?'—':set.weight)} ${esc(unit())} <span class="fast-mult">×</span> ${esc(set.reps||'—')}`}</button>
   <button class="set-done" data-action="toggle-set" data-item="${esc(item.id)}" data-set="${esc(set.id)}" aria-label="${set.done?'Unmark':'Complete'} ${esc(ex.name)} set ${i+1}" aria-pressed="${set.done}">${set.done?'✓':'○'}</button></div>`).join('')}
-  <div class="exercise-bottom"><button class="button dark sm" data-action="add-set" data-item="${esc(item.id)}">+ Add set</button><button class="button linkish sm" data-action="remove-set" data-item="${esc(item.id)}" ${item.sets.length<=1?'disabled':''}>Remove last set</button></div>
+  <div class="exercise-bottom"><button class="button dark sm" data-action="add-set" data-item="${esc(item.id)}">${isCardio(ex)?'+ Add cardio block':'+ Add set'}</button><button class="button linkish sm" data-action="remove-set" data-item="${esc(item.id)}" ${item.sets.length<=1?'disabled':''}>${isCardio(ex)?'Remove last block':'Remove last set'}</button></div>
   <div class="note-inline"><input type="text" placeholder="Optional exercise note" aria-label="${esc(ex.name)} exercise note" data-action="exercise-note" data-item="${esc(item.id)}" value="${esc(item.note)}"></div></article>`;
 }
 function renderHistory() {
@@ -485,10 +488,10 @@ function renderHistory() {
   return pageShell(`<div class="eyebrow">YOUR RECORD</div><h1 class="page-title">Workout history</h1><p class="subtle margin-bottom">Every session is kept on this device. Tap one to see or edit it.</p>
     ${all.length?all.map(session=>{
       const st=statsFor(session),open=historyOpen===session.id;
-      return `<article class="history-entry"><div class="row start"><div class="grow"><h3>${esc(session.title)}</h3><div class="subtle">${formatDate(session.date)} · ${st.exercises} exercises · ${st.sets} sets</div></div>
+      return `<article class="history-entry"><div class="row start"><div class="grow"><h3>${esc(session.title)}</h3><div class="subtle">${formatDate(session.date)} · ${st.exercises} exercises · ${esc(sessionSummary(session))}</div></div>
       <button class="button dark sm" data-action="toggle-history" data-id="${esc(session.id)}">${open?'Hide':'Details'}</button></div>
       ${open?`<div class="history-details margin-top"><div class="history-exercise"><div class="subtle small">Session notes</div><div class="small">${esc(session.notes || 'None')}</div></div>
-      ${(session.items || []).map(item=>{const e=exById(item.exerciseId);const ds=(item.sets||[]).filter(s=>s.done);return `<div class="history-exercise"><h4>${esc(e.name)}</h4><div class="history-sets">${ds.length?ds.map(s=>isTimed(e)?`${esc(s.reps)} ${esc(e.measure)}`:`${esc(s.weight||'BW')} ${esc(unit())} × ${esc(s.reps)}`).join('  ·  '):'No completed sets'}</div>${item.note?`<div class="subtle small">${esc(item.note)}</div>`:''}</div>`;}).join('')}
+      ${(session.items || []).map(item=>{const e=exById(item.exerciseId);const ds=(item.sets||[]).filter(s=>s.done);return `<div class="history-exercise"><h4>${esc(e.name)}</h4><div class="history-sets">${ds.length?ds.map(s=>isCardio(e)?esc(cardioSetSummary(s,e)):isTimed(e)?`${esc(s.reps)} ${esc(e.measure)}`:`${esc(s.weight||'BW')} ${esc(unit())} × ${esc(s.reps)}`).join('  ·  '):'No completed sets'}</div>${item.note?`<div class="subtle small">${esc(item.note)}</div>`:''}</div>`;}).join('')}
       <div class="row margin-top-sm"><button class="button dark sm" data-action="edit-history" data-id="${esc(session.id)}">Edit session</button><button class="button danger sm" data-action="delete-history" data-id="${esc(session.id)}">Delete session</button></div></div>`:''}</article>`;
     }).join(''):'<div class="empty"><div class="empty-icon">▤</div><strong>No sessions yet</strong><p>Finish a workout and your full set-by-set history appears here.</p><button class="button sm" data-action="start-plan">Start a workout</button></div>'}`);
 }
@@ -558,7 +561,7 @@ function undoLastSet() {
 }
 function renderMore() {
   const custom=state.exercises.filter(e=>e.custom).length;
-  return pageShell(`<div class="eyebrow">LIFTLOG 4.2 · ON THIS DEVICE</div><h1 class="page-title">Settings & backup</h1><p class="subtle margin-bottom">Your workouts save on this phone. Share a file when you want ChatGPT to review them.</p>
+  return pageShell(`<div class="eyebrow">LIFTLOG 4.3 · ON THIS DEVICE</div><h1 class="page-title">Settings & backup</h1><p class="subtle margin-bottom">Your workouts save on this phone. Share a file when you want ChatGPT to review them.</p>
     <div class="stack">${backupDue()?'<div class="notice warn">Backup recommended: you have new workouts saved only on this iPhone. Export your JSON backup to Files.</div>':''}<div class="card"><h2 class="section-title margin-bottom">Workout defaults</h2>
       <div class="input-row"><label for="location-select">Equipment</label><select id="location-select" data-action="settings-location"><option value="gym" ${state.settings.location==='gym'?'selected':''}>Full gym</option><option value="small" ${state.settings.location==='small'?'selected':''}>Small gym</option></select></div><div class="divider"></div>
       <div class="input-row"><label for="unit-select">Weight units</label><select id="unit-select" data-action="settings-unit"><option value="lb" ${unit()==='lb'?'selected':''}>Pounds (lb)</option><option value="kg" ${unit()==='kg'?'selected':''}>Kilograms (kg)</option></select></div><div class="divider"></div>
@@ -616,9 +619,10 @@ function showEditSet(itemId,setId) {
   const item=itemById(itemId),set=item?.sets.find(x=>x.id===setId);
   if(!set)return;
   const ex=exById(item.exerciseId),timed=isTimed(ex);
-  showSheet(`<div class="sheet-top"><div><h2 class="sheet-title">${esc(ex.name)}</h2><p class="subtle">Edit set ${item.sets.indexOf(set)+1}. Saved weights stay independent for every set.</p></div><button class="micro-btn" data-action="close-sheet">✕</button></div>
+  showSheet(`<div class="sheet-top"><div><h2 class="sheet-title">${esc(ex.name)}</h2><p class="subtle">${isCardio(ex)?'Log your duration and any readings you have.':`Edit set ${item.sets.indexOf(set)+1}. Saved weights stay independent for every set.`}</p></div><button class="micro-btn" data-action="close-sheet">✕</button></div>
     <div class="field-grid margin-top">${!timed?`<div class="field"><label for="set-edit-weight">Weight (${esc(unit())})</label><input id="set-edit-weight" type="number" inputmode="decimal" min="0" step="any" value="${esc(set.weight)}" placeholder="Weight"></div>`:''}
-    <div class="field"><label for="set-edit-reps">${esc(timed?ex.measure:'Repetitions')}</label><input id="set-edit-reps" type="number" inputmode="numeric" min="0" step="1" value="${esc(set.reps)}"></div></div>
+    <div class="field"><label for="set-edit-reps">${esc(timed?'Duration · '+ex.measure:'Repetitions')}</label><input id="set-edit-reps" type="number" inputmode="${timed?'decimal':'numeric'}" min="0" step="${timed?'any':'1'}" value="${esc(set.reps)}"></div></div>
+    ${isCardio(ex)?cardioFields(set):''}
     <div class="stack margin-top"><button class="button full" data-action="save-edit-set" data-item="${esc(itemId)}" data-set="${esc(setId)}">Save values</button></div>`);
 }
 function saveEditSet(itemId,setId) {
@@ -626,10 +630,11 @@ function saveEditSet(itemId,setId) {
   const ex=exById(item.exerciseId),timed=isTimed(ex);
   const reps=document.getElementById('set-edit-reps')?.value ?? '';
   const weight=timed?'':(document.getElementById('set-edit-weight')?.value??'');
-  if(reps!=='' && (!Number.isInteger(Number(reps))||Number(reps)<0)) {toast('Enter nonnegative whole-number reps or time');return;}
+  if(reps!=='' && (!Number.isFinite(Number(reps))||(!timed&&!Number.isInteger(Number(reps)))||Number(reps)<0)) {toast(timed?'Enter a nonnegative duration':'Enter nonnegative whole-number reps');return;}
+  let details;if(isCardio(ex)){try{details=readCardioFields();}catch(err){toast(err.message,5000);return;}}
   if(!timed && weight!=='' && (!Number.isFinite(Number(weight))||Number(weight)<0)) {toast('Enter a valid weight');return;}
   const fillRest=!timed&&set.weight===''&&weight!=='';
-  set.weight=weight;set.reps=reps;
+  set.weight=weight;set.reps=reps;if(details)set.cardio=details;
   // When a new exercise has no recorded loads yet, fill blank remaining sets
   // with the first entered weight. Already filled or completed sets stay untouched.
   if(fillRest)for(const other of item.sets)if(!other.done && other.weight==='')other.weight=weight;
@@ -668,7 +673,7 @@ function markSet(itemId,setId) {
   s.done=!s.done;
   s.completedAt=s.done?new Date().toISOString():null;
   lastSetAction=s.done?{itemId,setId}:null;
-  state.active.restUntil=s.done && Number(state.settings.restSeconds)>0 ? Date.now()+Number(state.settings.restSeconds)*1000 : (s.done?state.active.restUntil:null);
+  state.active.restUntil=s.done && !isCardio(ex) && Number(state.settings.restSeconds)>0 ? Date.now()+Number(state.settings.restSeconds)*1000 : null;
   focusedSetKey=null;persist();render();
 }
 function finishWorkout() {
@@ -738,8 +743,8 @@ function exportPreviousBackup() {
   }catch(err){toast('Could not read the previous backup: '+err.message,5000);}
 }
 function exportCSV() {
-  const rows=[['date','workout','exercise','set_number','weight','unit','reps_or_duration','measurement','completed','workout_notes','exercise_notes']];
-  for(const w of sessionsSorted())for(const i of w.items||[]){const e=exById(i.exerciseId);(i.sets||[]).forEach((s,k)=>rows.push([w.date,w.title,e.name,k+1,isTimed(e)?'':s.weight,unit(),s.reps,e.measure,s.done?'yes':'no',w.notes||'',i.note||'']));}
+  const rows=[['date','workout','exercise','set_number','weight','unit','reps_or_duration','measurement','completed','workout_notes','exercise_notes','distance','distance_unit','speed','speed_unit','incline_percent','machine_level','floors','effort_1_to_10','average_heart_rate_bpm','route_or_machine','measurement_source']];
+  for(const w of sessionsSorted())for(const i of w.items||[]){const e=exById(i.exerciseId);(i.sets||[]).forEach((s,k)=>rows.push([w.date,w.title,e.name,k+1,isTimed(e)?'':s.weight,unit(),s.reps,e.measure,s.done?'yes':'no',w.notes||'',i.note||'',s.cardio?.distance??'',s.cardio?.distanceUnit??'',s.cardio?.speed??'',s.cardio?.speedUnit??'',s.cardio?.incline??'',s.cardio?.level??'',s.cardio?.floors??'',s.cardio?.effort??'',s.cardio?.avgHeartRate??'',s.cardio?.benchmark??'',s.cardio?.source??'']));}
   downloadBlob('LiftLog-sets-'+localDate()+'.csv',rows.map(r=>r.map(csvCell).join(',')).join('\r\n'),'text/csv;charset=utf-8');toast('CSV prepared — save it to Files');
 }
 function coachSummary() {
@@ -751,11 +756,12 @@ function coachSummary() {
     lines.push(prefix+': '+w.date+' | '+w.title+(w.notes?' | Notes: '+w.notes:''));
     for(const item of w.items||[]){
       const e=exById(item.exerciseId),sets=item.sets.filter(s=>s.done);
-      if(sets.length)lines.push('  '+e.name+': '+sets.map(s=>isTimed(e)?`${s.reps} ${e.measure}`:`${s.weight===''?'BW':s.weight} ${unit()} × ${s.reps}`).join(' ; ')+(item.note?' | '+item.note:''));
+      if(sets.length)lines.push('  '+e.name+': '+sets.map(s=>isCardio(e)?cardioSetSummary(s,e):isTimed(e)?`${s.reps} ${e.measure}`:`${s.weight===''?'BW':s.weight} ${unit()} × ${s.reps}`).join(' ; ')+(item.note?' | '+item.note:''));
     }
   }
   if(state.active)formatSession(state.active,'In progress');
   for(const w of sessionsSorted().slice(0,15))formatSession(w,'Completed');
+  if(state.activityDays?.length)lines.push('Recent daily step totals (Apple Fitness, manually entered; already include walks): '+[...state.activityDays].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,7).map(d=>d.date+': '+d.steps).join('; '));
   if(!state.history.length&&!state.active)lines.push('No recorded workouts yet.');
   return lines.join('\n');
 }
@@ -786,13 +792,14 @@ function validateBackup(d) {
   const strings=(o,keys)=>{for(const key of keys)if(o[key]!=null&&!text(o[key]))fail();};
   if(!obj(d)||d.schema!==1||!obj(d.settings)||!['lb','kg'].includes(d.settings.unit)||!Array.isArray(d.history)||!Array.isArray(d.exercises))fail();
   if(d.settings.planChoices!=null && (!obj(d.settings.planChoices)||Object.values(d.settings.planChoices).some(key=>!text(key))))fail();
+  validateActivityDays(d.activityDays);
   const checkItems=(items,routine=false)=>{
     if(!Array.isArray(items))fail();
     for(const i of items){
       if(!obj(i)||!text(i.exerciseId)||!Array.isArray(i.sets))fail();
       strings(i,['note']);
       if(!routine)id(i.id);
-      for(const s of i.sets){if(!obj(s)||!numeric(s.weight)||!numeric(s.reps)||s.done!=null&&typeof s.done!=='boolean')fail();strings(s,['completedAt']);if(!routine)id(s.id);}
+      for(const s of i.sets){if(!obj(s)||!numeric(s.weight)||!numeric(s.reps)||s.done!=null&&typeof s.done!=='boolean')fail();strings(s,['completedAt']);validateCardio(s.cardio);if(!routine)id(s.id);}
     }
   };
   for(const e of d.exercises){
@@ -891,6 +898,12 @@ document.addEventListener('click',event=>{
   if(action==='jump-exercise'){showExerciseJump();return;}
   if(action==='focus-exercise'){focusExercise(itemId);return;}
   if(action==='undo-last'){undoLastSet();return;}
+  if(action==='cardio-picker'){showCardioPicker();return;}
+  if(action==='cardio-log-picker'){showCardioPicker(true);return;}
+  if(action==='log-cardio'){showSeparateCardioLog(id);return;}
+  if(action==='save-cardio-log'){saveSeparateCardioLog();return;}
+  if(action==='select-cardio'){addCardio(id);return;}
+  if(action==='save-steps'){saveActivitySteps();return;}
   if(action==='start-plan'){startWorkout('plan');return;}
   if(action==='show-plan-picker'){showPlanPicker();return;}
   if(action==='select-plan'){choosePlan(b.dataset.key);return;}
@@ -920,7 +933,7 @@ document.addEventListener('click',event=>{
   if(action==='add-set'){
     const item=itemById(itemId);if(!item)return;
     const previous=item.sets[item.sets.length-1]||{};
-    item.sets.push({id:uid('set'),weight:String(previous.weight??''),reps:String(previous.reps??exById(item.exerciseId).defaultReps),done:false});persist();render();return;
+    item.sets.push({id:uid('set'),weight:String(previous.weight??''),reps:String(previous.reps??exById(item.exerciseId).defaultReps),done:false,...(isCardio(exById(item.exerciseId))?{cardio:cardioDefaults()}:{})});persist();render();return;
   }
   if(action==='remove-set'){
     const item=itemById(itemId);if(!item||item.sets.length<=1)return;
@@ -1005,6 +1018,9 @@ document.addEventListener('change',event=>{
   if(t.id==='backup-file'){importBackup(t.files?.[0]);t.value='';return;}
   if(!writerReady||recoveryRequired||recoveryPending)return;
   const action=t.dataset.action;
+  if(t.id==='steps-date'){const input=document.getElementById('steps-count');if(input)input.value=state.activityDays.find(d=>d.date===t.value)?.steps??'';return;}
+  if(action==='cardio-comparison'){cardioComparisonKey=t.value;render();return;}
+  if(action==='cardio-metric'&&['minutes','pace','paceMiles','avgHeartRate','effort'].includes(t.value)){cardioMetric=t.value;render();return;}
   if(action==='progress-exercise'){progressExercise=t.value;render();return;}
   if(action==='settings-location'){state.settings.location=t.value;persist();render();return;}
   if(action==='settings-unit'){changeUnits(t.value);return;}

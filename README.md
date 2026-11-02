@@ -1,6 +1,6 @@
 # LiftLog — personal iPhone workout tracker
 
-LiftLog 4.2 — a local-only workout tracker. **No Google account, OAuth client or cloud sync is required.** Workouts save on your iPhone; sharing and backups happen when you choose.
+LiftLog 4.3 — a local-only workout tracker. **No Google account, OAuth client or cloud sync is required.** Workouts save on your iPhone; sharing and backups happen when you choose.
 
 ## Features
 
@@ -9,6 +9,18 @@ LiftLog 4.2 — a local-only workout tracker. **No Google account, OAuth client 
 - Custom exercises, saved routines, recommendations, full history and progress
 - Offline local saving, an IndexedDB mirror, JSON backup/restore and CSV export
 - Routine import and workout summary sharing for ChatGPT
+
+## Cardio and Apple Fitness
+
+Use the **Cardio** tab for walks, dog walks, jogs, treadmill, stairs, bike, elliptical or rowing. Start a cardio session, or add an activity to your current lifting workout. **Log a separate / completed session** records an already-finished activity without replacing an unfinished lift. Cardio-only sessions never advance A/B/C. Existing bike/stair entries appear in Cardio without being copied or counted twice.
+
+Log duration, optional distance and effort (1–10), plus any machine/monitor readings you have. Route/machine details can include speed, incline, level, floors and average heart rate. No watch is required, and missing readings stay blank. New entries recall the previous duration but do not automatically copy old actual distance, heart rate or effort.
+
+Six-week logged-minute totals show activity volume. Name the same route or machine in two workouts to compare repeat sessions; treadmill comparisons also require speed and incline, and stairs require a level. Different machines, entered settings, measurement sources and with-lifting contexts remain separate. Pace can be viewed in min/km or min/mi. The charts are performance comparisons, not invented VO₂ max estimates or a fitness diagnosis.
+
+Apple Fitness remains your phone's step tracker. LiftLog does not read Fitness or Health automatically. Optionally enter the daily step total shown in Fitness; changing the same date replaces that total, and walks are never added to it again. Cardio measurements and step records are included in complete JSON backups and shared snapshots. Workout CSV exports include cardio measurements; ChatGPT summaries include recent step totals.
+
+Automatic HealthKit access would require an authorized native iPhone component; the current Home Screen web app cannot do that. A future wearable is optional. No cloud synchronization, OpenAI API key or subscription is required.
 
 ## Choose where to start
 
