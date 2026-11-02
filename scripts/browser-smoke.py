@@ -196,7 +196,8 @@ try:
         assert other.locator('svg[aria-label="min/km over comparable cardio sessions"]').count() == 1
         assert other.evaluate('cardioRows().length') == 2
         other.set_viewport_size({'width':320,'height':700})
-        assert other.evaluate('document.documentElement.scrollWidth <= innerWidth'), 'Cardio overflow at narrow iPhone width'
+        overflow=other.evaluate("()=>Array.from(document.querySelectorAll('body *')).filter(e=>e.getBoundingClientRect().right>innerWidth+1).slice(0,12).map(e=>({tag:e.tagName,id:e.id,cls:e.className,width:e.getBoundingClientRect().width,right:e.getBoundingClientRect().right}))")
+        assert other.evaluate('document.documentElement.scrollWidth <= innerWidth'), 'Cardio overflow at narrow iPhone width: '+str(overflow)
         other.set_viewport_size({'width':390,'height':844})
         # A separate walk must not replace an unfinished lifting session.
         other.locator('[data-tab="today"]').click()

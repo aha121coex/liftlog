@@ -60,3 +60,7 @@
 .cardio-volume-row strong{text-align:right}
 .cardio-volume-track{height:9px;background:#304048;border-radius:6px;overflow:hidden}
 .cardio-volume-track span{display:block;height:100%;background:var(--mint);border-radius:6px}
+/* Safari date/number controls must not set a grid column's minimum width. */
+.field-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.field{min-width:0}
+.field input,.field select{width:100%;min-width:0}
