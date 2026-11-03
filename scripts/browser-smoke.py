@@ -49,11 +49,11 @@ try:
         page.wait_for_function('() => navigator.serviceWorker.controller !== null')
         print('Testing midweek routine selection',flush=True)
         page.get_by_role('button',name='Choose workout routine').click()
-        page.locator('[data-action="select-plan"][data-key="B"]').click()
+        page.locator('[data-action="select-plan"][data-key="H2D4"]').click()
         assert page.evaluate('state.history.length') == 0
         page.reload()
         page.wait_for_function('() => writerReady && !recoveryPending')
-        assert page.evaluate('suggestedPlan().key') == 'B'
+        assert page.evaluate('suggestedPlan().key') == 'H2D4'
         print('Testing logging', flush=True)
         page.locator('[data-action="start-plan"]').first.click()
         page.locator('[data-action="edit-set"]').first.click()
@@ -62,10 +62,10 @@ try:
         page.locator('[data-action="save-edit-set"]').click()
         page.locator('[data-action="quick-complete"]').click()
         page.get_by_role('button',name='Change workout routine',exact=True).click()
-        page.locator('[data-action="select-plan"][data-key="B"]').click()
+        page.locator('[data-action="select-plan"][data-key="H2D4"]').click()
         assert page.evaluate('state.active.items[0].sets[0].done') is True
         exercise_id=page.evaluate('state.active.items[0].exerciseId')
-        assert page.evaluate('state.active.planKey') == 'B'
+        assert page.evaluate('state.active.planKey') == 'H2D4'
         state = json.loads(page.evaluate(f'localStorage.getItem({json.dumps(key)})'))
         first = state['active']['items'][0]['sets'][0]
         assert (first['weight'], first['reps'], first['done']) == ('12.75','9',True)
@@ -133,7 +133,7 @@ try:
         other.locator('[data-tab="workout"]').click()
         other.locator('[data-action="finish"]').first.click()
         assert other.evaluate('state.history.length') == 1
-        assert other.evaluate('suggestedPlan().key') == 'C'
+        assert other.evaluate('suggestedPlan().key') == 'H2D5'
         assert other.evaluate("id=>createItem(id).sets[0].weight",exercise_id) == '12.75'
         assert other.evaluate("id=>createItem(id).sets[0].reps",exercise_id) == '9'
         original=other.evaluate('JSON.stringify(state.history)')
@@ -174,7 +174,7 @@ try:
         other.locator('[data-action="quick-complete"]').click()
         assert other.evaluate('state.active.restUntil') is None
         other.locator('[data-action="finish"]').first.click()
-        assert other.evaluate('suggestedPlan().key') == 'C'
+        assert other.evaluate('suggestedPlan().key') == 'H2D5'
         other.locator('[data-tab="cardio"]').click()
         other.locator('#steps-count').fill('6000')
         other.locator('[data-action="save-steps"]').click()
@@ -220,9 +220,57 @@ try:
         other.locator('#backup-file').set_input_files(cardio_backup)
         other.wait_for_function('()=>state.activityDays.length===1')
         assert other.evaluate('cardioRows().length') == 3
+        print('Testing prescribed two-week carries, warm-ups, skips and alternatives',flush=True)
+        other.locator('[data-tab="today"]').click()
+        other.locator('[data-action="show-plan-picker"]').first.click()
+        assert other.locator('[data-action="select-plan"][data-key^="H"]').count() == 12
+        other.locator('[data-action="select-plan"][data-key="H2D6"]').click()
+        assert other.evaluate('state.active.items[0].sets.length') == 4
+        other.locator('[data-action="edit-set"]').first.click()
+        other.locator('#set-edit-weight').fill('35.5')
+        other.locator('#set-edit-reps').fill('40')
+        other.locator('[data-action="save-edit-set"]').click()
+        other.locator('[data-action="quick-complete"]').click()
+        other.locator('[data-action="add-warmup"]').first.click()
+        other.locator('[data-action="edit-set"]').first.click()
+        other.locator('#set-edit-weight').fill('15')
+        other.locator('#set-edit-reps').fill('20')
+        assert other.locator('#set-edit-role').input_value() == 'warmup'
+        other.locator('[data-action="save-edit-set"]').click()
+        other.locator('[data-action="quick-complete"]').click()
+        assert other.evaluate('state.active.items[0].sets[0].role') == 'warmup'
+        assert other.evaluate('state.active.items[0].sets[1].weight') == '35.5'
+        other.locator('[data-action="exercise-menu"]').first.click()
+        other.locator('[data-action="skip-exercise"]').click()
+        assert other.evaluate('state.active.items[0].sets.filter(s=>s.skipped).length') == 3
+        assert other.evaluate('state.active.items[0].sets.filter(s=>s.done).length') == 2
+        other.locator('.exercise-card').nth(2).locator('[data-action="exercise-menu"]').click()
+        other.locator('[data-action="prescribed-alternative"]').click()
+        assert other.evaluate('state.active.items[2].exerciseId') == 'side-plank'
+        assert other.evaluate('state.active.items[2].sets[0].reps') == '20'
+        other.set_viewport_size({'width':320,'height':700})
+        assert other.evaluate('document.documentElement.scrollWidth <= innerWidth'), 'Program workout overflow at narrow iPhone width'
+        other.locator('[data-action="finish"]').first.click()
+        assert other.evaluate('suggestedPlan().key') == 'H1D1'
+        other.locator('[data-tab="history"]').click()
+        assert other.get_by_text('3 skipped',exact=False).count() >= 1
+        other.locator('[data-tab="more"]').click()
+        with other.expect_download() as info:
+            other.locator('[data-action="share-backup"]').click()
+        program_backup=Path(tmp)/'program.json'
+        info.value.save_as(program_backup)
+        program_record=json.loads(program_backup.read_text())['history'][-1]
+        assert program_record['items'][0]['sets'][0]['role'] == 'warmup'
+        assert program_record['items'][0]['sets'][1]['weight'] == '35.5'
+        assert program_record['items'][0]['sets'][1]['reps'] == '40'
+        assert program_record['items'][2]['prescription']['max'] == 30
+        other.locator('#backup-file').set_input_files(program_backup)
+        other.wait_for_function('()=>state.history.at(-1).planKey==="H2D6"')
+        assert other.evaluate('state.history.at(-1).items[0].sets[2].skipped') is True
+        assert other.evaluate('document.documentElement.scrollWidth <= innerWidth'), 'Program Today overflow at narrow iPhone width'
         assert set(hosts) == {urlsplit(url).netloc}, 'Unexpected external requests: '+str(hosts)
         assert not errors, errors
         browser.close()
-        print('PASS ('+args.engine+'): routine import, custom exercises, completed history, no external requests; touch viewport, exact manual entry, one-tap saves, reload, offline shell/logging, JSON round trip, IndexedDB recovery and corrupt-primary recovery; exclusive multi-window editing and lock transfer')
+        print('PASS ('+args.engine+'): all 12 program options, loaded carries, warm-ups, skipped work, prescribed alternative; routine import, custom exercises, history, no external requests; touch viewport, exact entry, one-tap saves, reload, offline shell/logging, backup round trip, recovery; exclusive multi-window editing and lock transfer')
 finally:
     server.shutdown()

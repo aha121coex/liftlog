@@ -1,6 +1,6 @@
 # LiftLog — personal iPhone workout tracker
 
-LiftLog 4.3 — a local-only workout tracker. **No Google account, OAuth client or cloud sync is required.** Workouts save on your iPhone; sharing and backups happen when you choose.
+LiftLog 4.4 — a local-only workout tracker. **No Google account, OAuth client or cloud sync is required.** Workouts save on your iPhone; sharing and backups happen when you choose.
 
 ## Features
 
@@ -12,7 +12,7 @@ LiftLog 4.3 — a local-only workout tracker. **No Google account, OAuth client 
 
 ## Cardio and Apple Fitness
 
-Use the **Cardio** tab for walks, dog walks, jogs, treadmill, stairs, bike, elliptical or rowing. Start a cardio session, or add an activity to your current lifting workout. **Log a separate / completed session** records an already-finished activity without replacing an unfinished lift. Cardio-only sessions never advance A/B/C. Existing bike/stair entries appear in Cardio without being copied or counted twice.
+Use the **Cardio** tab for walks, dog walks, jogs, treadmill, stairs, bike, elliptical or rowing. Start a cardio session, or add an activity to your current lifting workout. **Log a separate / completed session** records an already-finished activity without replacing an unfinished lift. Cardio-only sessions never advance your training sequence. Existing bike/stair entries appear in Cardio without being copied or counted twice.
 
 Log duration, optional distance and effort (1–10), plus any machine/monitor readings you have. Route/machine details can include speed, incline, level, floors and average heart rate. No watch is required, and missing readings stay blank. New entries recall the previous duration but do not automatically copy old actual distance, heart rate or effort.
 
@@ -24,9 +24,13 @@ Automatic HealthKit access would require an authorized native iPhone component; 
 
 ## Choose where to start
 
-Tap the workout name on Today to choose A, B or C. You can start mid-rotation without logging yesterday's workout. Your choice is saved if you close the app before starting. Finish B and the next suggestion becomes C; finish C and it returns to A. Use suggestion switches back to the automatic choice.
+Tap the workout name on Today and choose any session from **Week 1** or **Week 2**. The complete supplied program has six sessions in each week: Upper Push, Lower Push, Joint + Balance, Upper Pull, Lower Pull, Core + Carries. Day 7 is off. Both weeks retain their own exercises, working sets, rep/duration ranges, coaching notes, alternatives and cardio guidance. The program rules and double-progression instructions are available from Today and the active workout.
 
-Suggestions follow the latest recorded routine for your current equipment. Blank/custom workouts and edits to old sessions do not advance the rotation. Full-gym and travel-gym rotations are independent. You can also tap the active workout title or Change routine on Today; switching to a different workout requires confirmation before replacing unfinished sets.
+You can start mid-cycle without logging yesterday. Finish Week 1 Day 6 and the next training suggestion is Week 2 Day 1, with an off-day reminder; Week 2 Day 6 wraps to Week 1. Suggestions follow actual recorded program sessions, never reset on Monday, and never map old A/B/C logs onto the new program. Earlier routines remain selectable below the two-week plan. Travel routines remain independent. Manual choices persist until completion. Changing an unfinished session requires confirmation.
+
+Targets remain editable and do not count as completed work. **+ Warm-up** adds a separate ramp-up set; the set editor also allows warm-up/working labels. Use **Skip set** or an exercise's **Skip remaining sets** for omitted work. Finishing with pending work asks before marking it skipped. A partial session moves forward without automatically repeating completed work; a session with no completed entries does not advance the program. Time settings never silently remove prescribed exercises.
+
+Farmer carries record **weight per hand and seconds**. Record machine identity in each machine exercise; load recall and strength charts stay separate across machines. The Week 2 side-plank-row exercise's options include its prescribed standard side-plank alternative. No starting weights or completed cardio are fabricated. Preserve good technique and the prescribed RPE before choosing a progression; load increases remain your decision.
 
 ## Share with ChatGPT
 

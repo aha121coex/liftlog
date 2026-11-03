@@ -10,7 +10,7 @@ output = root/'dist'
 if output.exists():
     shutil.rmtree(output)
 output.mkdir()
-files = ['index.html','cardio.js','app.js','styles.css','sw.js','manifest.webmanifest','icon-192.png','icon-512.png','apple-touch-icon.png']
+files = ['index.html','cardio.js','program.js','app.js','styles.css','sw.js','manifest.webmanifest','icon-192.png','icon-512.png','apple-touch-icon.png']
 for name in files:
     shutil.copy2(root/name, output/name)
 (output/'.nojekyll').touch()

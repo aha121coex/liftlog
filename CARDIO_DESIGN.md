@@ -6,7 +6,7 @@ Status: implemented for the local-only 4.3 review branch. The user currently has
 Cardio is separate from strength training but integrated into the same history and fitness picture. It can be a standalone session or a finisher linked to a lifting session. A separate completed session can also be logged while an unfinished lifting workout remains open, without discarding or attaching to it. Include jogging around the block, walking the dogs, treadmill and stair climber. Show useful long-term performance changes and consider an optional watch/phone fitness-data integration. Do not invent a VO2 max estimate from inadequate inputs. A wearable may be a later phase; don't make one a prerequisite for basic logging.
 
 ## Implemented data and views
-- A Cardio area to log activities and view weekly activity volume and matched performance trends. Cardio-only sessions must not advance the A/B/C lifting rotation.
+- A Cardio area to log activities and view weekly activity volume and matched performance trends. Cardio-only sessions must not advance the lifting session sequence.
 - Record activity/mode, date/time, duration and optional distance, units, effort and average heart rate. Machine entries may include speed, incline, level, floors, and machine identity. Source and measurement units must be explicit. Missing heart rate stays missing.
 - Optional link from a cardio session to its lifting session. Count the cardio once; distinguish a fresh session from a post-lifting finisher in comparisons.
 - Dog walks and general steps contribute to activity volume. Compare running/walking benchmarks on comparable routes and conditions; distinguish stop/start leisure walks from sustained efforts.
