@@ -21,6 +21,7 @@ const PROGRAM_EXERCISES = [
   ['rope-pressdown','Rope triceps pressdown','Arms','Machines'],
   ['band-external-rotation','Band external rotation','Shoulders','Band/bodyweight'],
   ['goblet-box-squat','Goblet box squat','Lower body','Dumbbells'],
+  ['leg-press-calf-raise','Leg-press calf raise','Lower body','Machines'],
   ['standing-calf-raise','Standing calf raise','Lower body','Machines'],
   ['spanish-squat-hold','Spanish squat hold','Quads','Band/bodyweight','seconds'],
   ['band-hip-flexion','Standing band hip flexion','Lower body','Band/bodyweight'],
@@ -75,7 +76,7 @@ const wrist = () => hp('wrist-extension',2,15,15,'Per arm.');
 const day = (week,n,title,items,cardio,lowFatigue=false) => ({key:`H${week}D${n}`,programId:HOME_PROGRAM_ID,week,day:n,name:`Week ${week} · ${title}`,focus:`Day ${n} · ${title}`,description:lowFatigue?'Keep the entire session low-fatigue; prioritize control.':'Working sets shown; warm-ups are additional. Follow the sequence at your own pace.',items,ids:items.map(x=>x.exerciseId),cardio,lowFatigue});
 const HOME_PROGRAM = [
   day(1,1,'Upper Push',[hp('incline-db-bench',3,8,10,'Weight per dumbbell.',true),hp('machine-chest-press',2,10,12),hp('cable-lateral-raise',2,12,15),hp('rope-pressdown',2,10,15),easyCurl(),hp('band-external-rotation',2,15,15,'Per side.')],'10-minute hard finish.'),
-  day(1,2,'Lower Push',[hp('leg-press',4,8,12,'Use a comfortable foot position.',true),hp('goblet-box-squat',2,8,10,'Omit if it irritates the left knee.'),hp('ham-curl',3,10,15),hp('standing-calf-raise',3,12,15),hp('spanish-squat-hold',2,20,30,'Seconds.'),hp('band-hip-flexion',2,15,15,'Per side; start right.'),hp('hip-cars',1,3,3,'Slow reps per side; start right.')],'Optional 5–10 minutes easy.'),
+  day(1,2,'Lower Push',[hp('leg-press',4,8,12,'Use a comfortable foot position.',true),hp('goblet-box-squat',2,8,10,'Omit if it irritates the left knee.'),hp('ham-curl',3,10,15),hp('leg-press-calf-raise',3,12,15),hp('spanish-squat-hold',2,20,30,'Seconds.'),hp('band-hip-flexion',2,15,15,'Per side; start right.'),hp('hip-cars',1,3,3,'Slow reps per side; start right.')],'Optional 5–10 minutes easy.'),
   day(1,3,'Joint + Balance',jointDay(),'20–30 minutes at conversational effort.',true),
   day(1,4,'Upper Pull',[hp('neutral-lat-pulldown',3,8,10,'',true),hp('row-supported',3,10,12,'',true),hp('straight-arm-pulldown',2,12,15),highRow(),hp('barbell-curl',2,10,12),hp('cable-y-raise',2,12,15)],'Optional 10 minutes easy/moderate.'),
   day(1,5,'Lower Pull',[rdl(),hp('hip-thrust',3,8,10,'',true),hp('back-extension-glute',2,10,15),hp('hamstring-curl',2,10,15),lateralWalk(),hp('hip-ir-lift',1,6,6,'Per side; start right.')],'Optional 5–10 minutes easy.'),
