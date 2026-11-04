@@ -4,7 +4,7 @@ const value=(h,code)=>JSON.parse(h.run('JSON.stringify('+code+')'));
 // Independent transcription of the supplied prescriptions, not generated from app code.
 const expected=[
   [['incline-db-bench',3,8,10],['machine-chest-press',2,10,12],['cable-lateral-raise',2,12,15],['rope-pressdown',2,10,15],['ham-curl',2,12,15],['band-external-rotation',2,15,15]],
-  [['leg-press',4,8,12],['goblet-box-squat',2,8,10],['ham-curl',3,10,15],['standing-calf-raise',3,12,15],['spanish-squat-hold',2,20,30],['band-hip-flexion',2,15,15],['hip-cars',1,3,3]],
+  [['leg-press',4,8,12],['goblet-box-squat',2,8,10],['ham-curl',3,10,15],['leg-press-calf-raise',3,12,15],['spanish-squat-hold',2,20,30],['band-hip-flexion',2,15,15],['hip-cars',1,3,3]],
   [['balance-reaches',2,1,1],['hip-airplane',2,3,3],['hip-ir-lift',2,6,6],['wall-slide-liftoff',2,8,8],['deep-squat-hold',2,20,30],['hip-flexor-stretch',2,20,30],['forearm-rotation',2,12,12]],
   [['neutral-lat-pulldown',3,8,10],['row-supported',3,10,12],['straight-arm-pulldown',2,12,15],['supported-high-row',2,12,15],['barbell-curl',2,10,12],['cable-y-raise',2,12,15]],
   [['rear-foot-single-rdl',3,8,12],['hip-thrust',3,8,10],['back-extension-glute',2,10,15],['hamstring-curl',2,10,15],['band-lateral-walk',2,10,10],['hip-ir-lift',1,6,6]],
