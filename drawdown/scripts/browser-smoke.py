@@ -156,7 +156,12 @@ def main():
         page.reload()
         ready(page)
         page.wait_for_function('navigator.serviceWorker.controller !== null')
-        context.set_offline(True)
+        if args.engine == 'webkit':
+            # WebKit automation can reject offline navigation before the worker runs.
+            server.shutdown()
+            server.server_close()
+        else:
+            context.set_offline(True)
         page.reload(wait_until='domcontentloaded')
         ready(page)
         check(page.locator('.ticker-card').count()==12,'offline cold reload lost the watchlist')
@@ -164,7 +169,8 @@ def main():
         check(page.locator('#alert-count').inner_text()=='0','offline cached readings counted as current')
         check(page.evaluate("localStorage.getItem('liftlog.personal.v1')")=='sentinel-workout','LiftLog storage was modified')
         check(page.evaluate("caches.has('liftlog-shell-sentinel')"),'LiftLog cache was deleted')
-        context.set_offline(False)
+        if args.engine != 'webkit':
+            context.set_offline(False)
         check(not errors,'uncaught browser errors: '+repr(errors))
         context.close()
         browser.close()
