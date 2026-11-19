@@ -29,5 +29,19 @@ jobs:
       - run: python -m playwright install --with-deps ${{ matrix.engine }}
       - run: python scripts/build-site.py
       - run: python scripts/browser-smoke.py --engine ${{ matrix.engine }}
+      - run: python drawdown/scripts/browser-smoke.py --engine ${{ matrix.engine }}
       - if: matrix.engine == 'chromium'
         run: python scripts/upgrade-smoke.py
+  live-market-data:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify every watchlist symbol before release
+        run: |
+          node drawdown/scripts/update-data.mjs --output "$RUNNER_TEMP/drawdown-monitor.json"
+          node --input-type=module -e 'import fs from "node:fs"; const data = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/drawdown-monitor.json")); if (data.updatedCount !== 12) throw new Error("All 12 symbols must update before the first release.");'

@@ -1,8 +1,10 @@
-name: Publish LiftLog
+name: Publish apps
 on:
   push:
     branches: [main]
   workflow_dispatch:
+  schedule:
+    - cron: '23 * * * *'
 permissions:
   contents: read
 concurrency:
@@ -10,18 +12,30 @@ concurrency:
   cancel-in-progress: false
 jobs:
   quality:
+    if: github.event_name != 'schedule'
     uses: ./.github/workflows/test.yml
   build:
     needs: quality
+    if: ${{ !cancelled() && (needs.quality.result == 'success' || github.event_name == 'schedule') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify scheduled market update
+        if: github.event_name == 'schedule'
+        run: npm --prefix drawdown test
       - run: python3 scripts/build-site.py
+      - name: Fetch public watchlist snapshot
+        run: node drawdown/scripts/update-data.mjs --output dist/drawdown/data/monitor.json
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
   deploy:
     needs: build
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       pages: write

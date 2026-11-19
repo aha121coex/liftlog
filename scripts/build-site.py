@@ -13,6 +13,10 @@ output.mkdir()
 files = ['index.html','cardio.js','program.js','app.js','styles.css','sw.js','manifest.webmanifest','icon-192.png','icon-512.png','apple-touch-icon.png']
 for name in files:
     shutil.copy2(root/name, output/name)
+subprocess.run([
+    'python3', str(root/'drawdown/scripts/build-static.py'),
+    '--output', str(output/'drawdown'),
+], check=True)
 (output/'.nojekyll').touch()
 version = json.loads((root/'package.json').read_text())['version']
 commit = subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()

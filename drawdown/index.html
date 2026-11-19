@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f6f2">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Drawdown">
+  <meta name="description" content="Your watchlist's distance from its one-year and available-history peaks.">
+  <title>Drawdown Monitor</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <a class="brand" href="./" aria-label="Drawdown Monitor home"><span class="brand-mark" aria-hidden="true">↘</span><span>Drawdown<span class="brand-subtitle">MONITOR</span></span></a>
+      <div class="header-actions">
+        <button type="button" id="about-open" class="icon-button" aria-label="About and install">i</button>
+        <button type="button" id="settings-open" class="icon-button" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M9 4v6m6 4v6"/></svg></button>
+      </div>
+    </header>
+
+    <main>
+      <section class="intro" aria-labelledby="page-title">
+        <p class="eyebrow">A LITTLE PERSPECTIVE</p>
+        <h1 id="page-title">Keep an eye<br>on the pullback.</h1>
+        <p class="intro-copy">Your watchlist. Its peaks. Where things stand.</p>
+      </section>
+
+      <section class="overview" aria-label="Watchlist overview">
+        <div class="overview-top"><span class="status-label"><span class="status-dot" id="status-dot"></span><span id="status-text">Ready to check</span></span><button type="button" id="refresh-button" class="refresh-button" aria-label="Refresh latest published snapshot"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"/></svg><span id="refresh-label">Refresh</span></button></div>
+        <div class="overview-counts"><div><strong id="alert-count">—</strong><span>in your review zone</span></div><span class="overview-rule"></span><div><strong id="watch-count">12</strong><span>on your watchlist</span></div></div>
+        <p class="threshold-copy">Review when the 1-year drawdown reaches <button type="button" id="threshold-button">−20%</button></p>
+        <p id="review-freshness" class="review-freshness">0/12 current readings. Cached readings appear in All.</p>
+      </section>
+
+      <div id="message" class="message" role="status" hidden></div>
+
+      <section class="watchlist-section" aria-labelledby="watchlist-title">
+        <div class="section-heading"><h2 id="watchlist-title">Your watchlist</h2><div class="filters" aria-label="Filter watchlist"><button type="button" id="filter-all" class="filter active" aria-pressed="true">All <span>12</span></button><button type="button" id="filter-alerts" class="filter" aria-pressed="false">To review <span id="filter-alert-count">0</span></button></div></div>
+        <div class="sort-row"><label for="sort-select">Sort by</label><select id="sort-select"><option value="watchlist">Watchlist order</option><option value="drawdown">Largest drawdown</option></select></div>
+        <div id="cards" class="cards" aria-busy="false"></div>
+        <div id="empty-alerts" class="empty-alerts" hidden><span aria-hidden="true">✓</span><h3>Nothing in your review zone</h3><p>No available reading is at or below your threshold.</p></div>
+      </section>
+
+      <footer class="app-footer"><p id="updated-text">Refresh to load the latest published snapshot.</p><p>GitHub updates hourly; timing may vary.</p><p>Prices in USD · Market data may be delayed</p><button type="button" id="footer-about">How it works &amp; install</button></footer>
+    </main>
+  </div>
+
+  <dialog id="settings-dialog" aria-labelledby="settings-title">
+    <div class="dialog-heading"><h2 id="settings-title">Your review threshold</h2><button type="button" class="icon-button" data-close="settings-dialog" aria-label="Close settings">×</button></div>
+    <p>Highlight a ticker when its drawdown from the past 365 days reaches this level.</p>
+    <form id="settings-form"><label for="threshold-input">1-year drawdown (%)</label><div class="input-wrap"><input id="threshold-input" name="threshold" type="number" min="-100" max="-0.1" step="0.1" value="-20" inputmode="decimal" required><span>%</span></div><p class="field-help">Use a negative number, such as −20.</p><button class="primary-button" type="submit">Save threshold</button></form>
+    <p class="dialog-note">The review zone is a prompt to investigate a ticker, not a buy signal. There are no background notifications.</p>
+  </dialog>
+
+  <dialog id="about-dialog" aria-labelledby="about-title">
+    <div class="dialog-heading"><h2 id="about-title">A view of the drawdown</h2><button type="button" class="icon-button" data-close="about-dialog" aria-label="Close about">×</button></div>
+    <p><strong>1 year</strong> compares the latest available price with the highest reading in the past 365 days. The <strong>history high</strong> is the highest in available history; the provider may not supply every past trading day.</p>
+    <p>A deep drawdown can help you find something worth a closer look. It does not establish that an asset is cheap or a good investment. Consider the business or asset, valuation, risks and your own plan before deciding.</p>
+    <p>For stocks and crypto, peaks use daily highs, falling back to closes when a high is missing. ETFs use dividend-adjusted closing highs; the comparison price is put on the same adjusted scale while the displayed quote stays in USD. Days missing adjusted prices are excluded if adjusted history is available; a close-only fallback is labelled when adjusted history is absent. These ETF comparisons can differ from an intraday price chart.</p>
+    <p>Drawdown = (comparison price ÷ recorded high − 1) × 100. Periods end at the quote’s timestamp. A positive value means the latest comparison price is above the recorded high. Available history means all history the provider supplies, which may start after the asset’s inception.</p>
+    <p>Recent returns add context over the past 30 and 90 days. The recovery figure shows the percentage gain needed to regain the 1-year peak; losses and recovery gains are not symmetric.</p>
+    <p>GitHub fetches market data on an hourly schedule and publishes a snapshot. Scheduled runs can be delayed or skipped. <strong>Refresh</strong> loads the latest published snapshot; it does not request a new quote from Yahoo. Check the snapshot time and each card’s quote time.</p>
+    <p>Quotes may be delayed. Cached readings keep their original timestamps; a refresh does not make an old quote current. Cached rows and snapshots over two hours old are excluded from the review count and filter. Quote age can be longer when the market is closed.</p>
+    <div class="install-note"><h3>Put it on your iPhone</h3><ol><li>Open this address in <strong>Safari</strong>.</li><li>Tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>.</li><li>Turn on <strong>Open as Web App</strong> if shown, then tap <strong>Add</strong>.</li></ol><p>Open the Drawdown icon whenever you want to check. No Mac is needed.</p></div>
+    <p class="dialog-note">The app checks for a new snapshot on opening and hourly while open. GitHub can publish snapshots while this app is closed; iOS does not keep this web app running or send background alerts. Saved readings and your threshold stay in this browser on this device.</p>
+  </dialog>
+</body>
+</html>

@@ -1,5 +1,7 @@
 # LiftLog — personal iPhone workout tracker
 
+The repository also contains [Drawdown Monitor](drawdown/README.md), a separate iPhone Home Screen investing watchlist under `/liftlog/drawdown/`. It has its own app identity, offline shell and settings. The publishing workflow updates its public price snapshot hourly; LiftLog's workout storage and installed address stay the same.
+
 LiftLog 4.4 — a local-only workout tracker. **No Google account, OAuth client or cloud sync is required.** Workouts save on your iPhone; sharing and backups happen when you choose.
 
 ## Features
