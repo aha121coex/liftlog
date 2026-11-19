@@ -117,6 +117,11 @@ def main():
             check(page.evaluate('document.documentElement.scrollWidth <= innerWidth'),f'horizontal overflow at {width}px')
         page.set_viewport_size({'width':390,'height':844})
         if args.screenshot: page.screenshot(path=args.screenshot,full_page=True)
+        page.click('#filter-alerts')
+        check(page.locator('.ticker-name').all_text_contents() == ['AMD','MRNA','GOOGL','RIVN','VTI'],
+              'review must rank losses from largest to smallest with default watchlist settings')
+        page.click('#filter-all')
+        check(page.locator('.ticker-name').first.inner_text() == 'VTI', 'review sorting changed the All list')
         page.select_option('#sort-select','drawdown')
         check(page.locator('.ticker-name').first.inner_text()=='AMD','drawdown sorting failed')
         page.click('#filter-alerts')

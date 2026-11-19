@@ -160,7 +160,11 @@ function render() {
   $('#filter-alert-count').textContent = String(alerts.length);
   $('#threshold-button').textContent = pct(threshold,Number.isInteger(threshold) ? 0 : 1);
   const shown = filter === 'alerts' ? alerts : [...TICKERS];
-  if (sort === 'drawdown') shown.sort((a,b) => {
+  const review = filter === 'alerts';
+  const activeSort = review ? 'drawdown' : sort;
+  $('#sort-select').value = activeSort;
+  $('#sort-select').disabled = review;
+  if (activeSort === 'drawdown') shown.sort((a,b) => {
     const left = readings.get(a.sym);
     const right = readings.get(b.sym);
     return (validReading(left) ? left.dd1y : Infinity) - (validReading(right) ? right.dd1y : Infinity);
