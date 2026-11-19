@@ -2,8 +2,8 @@
   "name": "liftlog",
   "private": true,
   "scripts": {
-    "test": "node --test tests/*.test.cjs",
-    "check": "node --check cardio.js && node --check program.js && node --check app.js && node --check sync.js && node --check sync-protocol.js && node --check sw.js && python3 scripts/prepare-shell.py --check",
+    "test": "node --test tests/*.test.cjs && npm --prefix drawdown test",
+    "check": "node --check cardio.js && node --check program.js && node --check app.js && node --check sync.js && node --check sync-protocol.js && node --check sw.js && python3 scripts/prepare-shell.py --check && npm --prefix drawdown run check",
     "build": "python3 scripts/build-site.py",
     "pretest": "python3 scripts/build-site.py"
   },
