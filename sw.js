@@ -25,7 +25,9 @@ self.addEventListener('fetch',event=>{
   const url=new URL(event.request.url);
   if(url.origin!==base.origin||!url.pathname.startsWith(base.pathname))return;
   const path='./'+url.pathname.slice(base.pathname.length);
-  if(!Object.hasOwn(ASSET_HASHES,path)&&event.request.mode!=='navigate')return;
+  // Only LiftLog's own two entry URLs can use its offline home page.
+  if(event.request.mode==='navigate' && path!=='./' && path!=='./index.html')return;
+  if(!Object.hasOwn(ASSET_HASHES,path))return;
   event.respondWith((async()=>{
     const cache=await caches.open(CACHE);
     const target=event.request.mode==='navigate'?'./index.html':path;
