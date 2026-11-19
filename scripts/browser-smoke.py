@@ -47,6 +47,13 @@ try:
         page.evaluate("Promise.race([navigator.serviceWorker.ready.then(()=>true),new Promise((_,reject)=>setTimeout(()=>reject(Error('Service worker readiness timeout')),8000))])")
         page.reload()
         page.wait_for_function('() => navigator.serviceWorker.controller !== null')
+        if not args.url:
+            # Reproduce the first visit from a phone with the LiftLog worker active.
+            drawdown = context.new_page()
+            drawdown.goto(url + 'drawdown/')
+            assert drawdown.title() == 'Drawdown Monitor'
+            drawdown.locator('#cards .ticker-card').first.wait_for()
+            drawdown.close()
         print('Testing midweek routine selection',flush=True)
         page.get_by_role('button',name='Choose workout routine').click()
         page.locator('[data-action="select-plan"][data-key="H2D4"]').click()
