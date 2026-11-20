@@ -2,6 +2,7 @@
 import { readFile, writeFile, mkdir, rename, rm } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DEFAULT_TICKERS } from '../engine.js';
 import { fetchMonitor } from '../market.js';
 import { mergeSnapshots } from '../snapshot.js';
 
@@ -63,8 +64,27 @@ async function remotePrevious() {
 
 export async function updateData({ output, previous }) {
   const saved = await localPrevious(previous || output) || await remotePrevious();
-  const fresh = await fetchMonitor();
-  const merged = mergeSnapshots(fresh, saved);
+  const tickers = [...DEFAULT_TICKERS];
+  // Read only requests submitted by the owner. Closing the issue removes the symbol.
+  for (let page = 1; tickers.length < 50; page++) {
+    const url = new URL('https://api.github.com/repos/aha121coex/liftlog/issues');
+    url.search = new URLSearchParams({creator:'aha121coex',state:'open',sort:'created',direction:'asc',per_page:'100',page});
+    const headers = {Accept:'application/vnd.github+json'};
+    if (process.env.GITHUB_TOKEN) headers.Authorization = 'Bearer ' + process.env.GITHUB_TOKEN;
+    const response = await fetch(url, {headers, signal:AbortSignal.timeout(15000)});
+    if (!response.ok) throw new Error('Could not load the watchlist: GitHub HTTP ' + response.status);
+    const issues = await response.json();
+    for (const issue of issues) {
+      const match = /^Track (stock|etf|index|crypto): ([A-Z^][A-Z0-9.^=-]{0,19})$/.exec(issue.title);
+      if (match && !issue.pull_request && issue.user.login === 'aha121coex' &&
+          !tickers.some(t => t.sym === match[2]) && tickers.length < 50) {
+        tickers.push({kind:match[1], sym:match[2]});
+      }
+    }
+    if (issues.length < 100) break;
+  }
+  const fresh = await fetchMonitor({tickers});
+  const merged = mergeSnapshots(fresh, saved, tickers);
   if (!merged.availableCount) {
     for (const row of merged.results) console.error(`${row.sym}: ${row.error}`);
     throw new Error('No valid prices are available; keeping the previously published site.');

@@ -34,34 +34,38 @@
 
       <section class="overview" aria-label="Watchlist overview">
         <div class="overview-top"><span class="status-label"><span class="status-dot" id="status-dot"></span><span id="status-text">Ready to check</span></span><button type="button" id="refresh-button" class="refresh-button" aria-label="Refresh latest published snapshot"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"/></svg><span id="refresh-label">Refresh</span></button></div>
-        <div class="overview-counts"><div><strong id="alert-count">—</strong><span>in your review zone</span></div><span class="overview-rule"></span><div><strong id="watch-count">12</strong><span>on your watchlist</span></div></div>
-        <p class="threshold-copy">Review when the 1-year drawdown reaches <button type="button" id="threshold-button">−20%</button></p>
-        <p id="review-freshness" class="review-freshness">0/12 current readings. Cached readings appear in All.</p>
+        <div class="overview-counts"><div><strong id="alert-count">—</strong><span>in your review zone</span></div><span class="overview-rule"></span><div><strong id="watch-count">16</strong><span>on your watchlist</span></div></div>
+        <p class="threshold-copy">Review when the <span id="period-caption">1-year</span> drawdown reaches <button type="button" id="threshold-button">−20%</button></p>
+        <p id="review-freshness" class="review-freshness">0/16 current readings. Cached readings appear in All.</p>
       </section>
 
       <div id="message" class="message" role="status" hidden></div>
 
       <section class="watchlist-section" aria-labelledby="watchlist-title">
-        <div class="section-heading"><h2 id="watchlist-title">Your watchlist</h2><div class="filters" aria-label="Filter watchlist"><button type="button" id="filter-all" class="filter active" aria-pressed="true">All <span>12</span></button><button type="button" id="filter-alerts" class="filter" aria-pressed="false">To review <span id="filter-alert-count">0</span></button></div></div>
-        <div class="sort-row"><label for="sort-select">Sort by</label><select id="sort-select"><option value="watchlist">Watchlist order</option><option value="drawdown">Largest drawdown</option></select></div>
+        <div class="section-heading"><h2 id="watchlist-title">Your watchlist</h2><div class="filters" aria-label="Filter watchlist"><button type="button" id="filter-all" class="filter active" aria-pressed="true">All <span>16</span></button><button type="button" id="filter-alerts" class="filter" aria-pressed="false">To review <span id="filter-alert-count">0</span></button></div></div>
+        <details class="add-ticker"><summary>Add a ticker</summary>
+          <form id="ticker-form"><label>Symbol <input required maxlength="20" id="symbol-input" placeholder="e.g. AAPL" autocapitalize="characters" autocomplete="off"></label>
+          <label>Type <select id="kind-input"><option value="stock">Stock</option><option value="etf">ETF</option><option value="index">Index</option><option value="crypto">Crypto</option></select></label>
+          <button type="submit">Continue on GitHub</button></form><p>Sign in as the repository owner and submit the prefilled public request. The next hourly update adds the ticker here. Close the request on GitHub to remove it. Supports up to 50 USD tickers and indexes.</p><p id="ticker-feedback" role="status"></p></details>
+        <div class="sort-row"><label for="period-select">Period</label><select id="period-select"><option value="30d">30 days</option><option value="6m">6 months</option><option value="1y" selected>1 year</option><option value="5y">5 years</option></select><label for="sort-select">Sort by</label><select id="sort-select"><option value="watchlist">Watchlist order</option><option value="drawdown">Largest decline first</option><option value="smallest">Smallest decline first</option><option value="name">Name A–Z</option></select></div>
         <div id="cards" class="cards" aria-busy="false"></div>
         <div id="empty-alerts" class="empty-alerts" hidden><span aria-hidden="true">✓</span><h3>Nothing in your review zone</h3><p>No available reading is at or below your threshold.</p></div>
       </section>
 
-      <footer class="app-footer"><p id="updated-text">Refresh to load the latest published snapshot.</p><p>GitHub updates hourly; timing may vary.</p><p>Prices in USD · Market data may be delayed</p><button type="button" id="footer-about">How it works &amp; install</button></footer>
+      <footer class="app-footer"><p id="updated-text">Refresh to load the latest published snapshot.</p><p>GitHub updates hourly; timing may vary.</p><p>USD prices and index points · Market data may be delayed</p><button type="button" id="footer-about">How it works &amp; install</button></footer>
     </main>
   </div>
 
   <dialog id="settings-dialog" aria-labelledby="settings-title">
     <div class="dialog-heading"><h2 id="settings-title">Your review threshold</h2><button type="button" class="icon-button" data-close="settings-dialog" aria-label="Close settings">×</button></div>
-    <p>Highlight a ticker when its drawdown from the past 365 days reaches this level.</p>
-    <form id="settings-form"><label for="threshold-input">1-year drawdown (%)</label><div class="input-wrap"><input id="threshold-input" name="threshold" type="number" min="-100" max="-0.1" step="0.1" value="-20" inputmode="decimal" required><span>%</span></div><p class="field-help">Use a negative number, such as −20.</p><button class="primary-button" type="submit">Save threshold</button></form>
+    <p>Highlight a ticker when its drawdown for the selected period reaches this level.</p>
+    <form id="settings-form"><label for="threshold-input">Drawdown (%)</label><div class="input-wrap"><input id="threshold-input" name="threshold" type="number" min="-100" max="-0.1" step="0.1" value="-20" inputmode="decimal" required><span>%</span></div><p class="field-help">Use a negative number, such as −20.</p><button class="primary-button" type="submit">Save threshold</button></form>
     <p class="dialog-note">The review zone is a prompt to investigate a ticker, not a buy signal. There are no background notifications.</p>
   </dialog>
 
   <dialog id="about-dialog" aria-labelledby="about-title">
     <div class="dialog-heading"><h2 id="about-title">A view of the drawdown</h2><button type="button" class="icon-button" data-close="about-dialog" aria-label="Close about">×</button></div>
-    <p><strong>1 year</strong> compares the latest available price with the highest reading in the past 365 days. The <strong>history high</strong> is the highest in available history; the provider may not supply every past trading day.</p>
+    <p>The selected period compares the latest available price with its highest reading over 30, 183, 365 or 1,826 days. New listings use their available history and show the start date. The <strong>history high</strong> is the highest in available history; the provider may not supply every past trading day.</p>
     <p>A deep drawdown can help you find something worth a closer look. It does not establish that an asset is cheap or a good investment. Consider the business or asset, valuation, risks and your own plan before deciding.</p>
     <p>For stocks and crypto, peaks use daily highs, falling back to closes when a high is missing. ETFs use dividend-adjusted closing highs; the comparison price is put on the same adjusted scale while the displayed quote stays in USD. Days missing adjusted prices are excluded if adjusted history is available; a close-only fallback is labelled when adjusted history is absent. These ETF comparisons can differ from an intraday price chart.</p>
     <p>Drawdown = (comparison price ÷ recorded high − 1) × 100. Periods end at the quote’s timestamp. A positive value means the latest comparison price is above the recorded high. Available history means all history the provider supplies, which may start after the asset’s inception.</p>

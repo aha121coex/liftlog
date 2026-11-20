@@ -2,6 +2,7 @@ name: Tests
 on: [push, pull_request, workflow_call]
 permissions:
   contents: read
+  issues: read
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -42,6 +43,8 @@ jobs:
         with:
           node-version: '22'
       - name: Verify every watchlist symbol before release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           node drawdown/scripts/update-data.mjs --output "$RUNNER_TEMP/drawdown-monitor.json"
-          node --input-type=module -e 'import fs from "node:fs"; const data = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/drawdown-monitor.json")); if (data.updatedCount !== 12) throw new Error("All 12 symbols must update before the first release.");'
+          node --input-type=module -e 'import fs from "node:fs"; const data = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/drawdown-monitor.json")); if (data.results.slice(0,16).length !== 16 || data.results.slice(0,16).some(row => !row.windows?.["5y"] || row.cached)) throw new Error("All 16 default symbols must update before the first release.");'

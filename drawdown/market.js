@@ -112,7 +112,7 @@ function validateHistory(json, history, sym, now) {
 export async function fetchTicker(ticker, options = {}) {
   const config = optionsWithDefaults(options);
   if (!ticker || typeof ticker.sym !== 'string' || !/^[A-Z0-9.^=-]{1,24}$/.test(ticker.sym) ||
-      !['stock', 'etf', 'crypto'].includes(ticker.kind)) {
+      !['stock', 'etf', 'crypto', 'index'].includes(ticker.kind)) {
     throw new Error('Ticker configuration is invalid.');
   }
   const { sym, kind } = ticker;
@@ -136,6 +136,8 @@ export async function fetchTicker(ticker, options = {}) {
   const live = candidates[0];
   if (!live) throw new Error('No valid timestamped latest price is available.');
   const result = analyzeTicker({ sym, kind, live, history, now: config.now });
+  const meta = historyJSON.chart.result[0].meta;
+  result.name = meta.longName || meta.shortName || sym;
   result.quoteSource = minuteQuote && minuteQuote === live ? 'intraday-chart' : 'daily-chart-meta';
   result.historyCoverage = positive(historyJSON.chart.result[0].meta?.firstTradeDate)
     ? 'provider-full-history' : 'requested-full-history';

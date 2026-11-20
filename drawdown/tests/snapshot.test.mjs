@@ -22,7 +22,7 @@ test('fresh results preserve prices and real timestamps in configured order', ()
   const result = mergeSnapshots(snapshot([row('NVDA'), row()]));
   assert.equal(result.updatedCount, 2);
   assert.equal(result.availableCount, 2);
-  assert.equal(result.results.length, 12);
+  assert.equal(result.results.length, 16);
   assert.equal(result.results[0].sym, 'VTI');
   assert.equal(result.results[0].cached, false);
   assert.equal(result.results[0].fetchedAt, iso(NOW));
@@ -107,7 +107,7 @@ test('unknown symbols and duplicate symbols do not produce ambiguous readings', 
   const result = mergeSnapshots(snapshot([row('UNKNOWN'), row(), row('VTI', { price: 90, dd1y: -10, ddMax: -55 })]));
   assert.equal(result.results.some(item => item.sym === 'UNKNOWN'), false);
   assert.equal(result.availableCount, 0);
-  assert.equal(result.results.length, 12);
+  assert.equal(result.results.length, 16);
 });
 
 test('stale prior readings require an honest fetch timestamp and USD basis', () => {

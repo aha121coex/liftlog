@@ -2,7 +2,8 @@ const TICKERS = [
   {sym:'VTI',kind:'etf'}, {sym:'VXUS',kind:'etf'}, {sym:'GOOGL',kind:'stock'},
   {sym:'META',kind:'stock'}, {sym:'MSFT',kind:'stock'}, {sym:'NVDA',kind:'stock'},
   {sym:'AMD',kind:'stock'}, {sym:'INTC',kind:'stock'}, {sym:'MRNA',kind:'stock'},
-  {sym:'RIVN',kind:'stock'}, {sym:'BTC-USD',kind:'crypto'}, {sym:'GLDM',kind:'etf'}
+  {sym:'RIVN',kind:'stock'}, {sym:'BTC-USD',kind:'crypto'}, {sym:'GLDM',kind:'etf'},
+  {sym:'ANT',kind:'stock'}, {sym:'SPCX',kind:'stock'}, {sym:'^IXIC',kind:'index'}, {sym:'^GSPC',kind:'index'}
 ];
 const SETTINGS_KEY = 'drawdown.monitor.settings.v1';
 const CACHE_KEY = 'drawdown.monitor.readings.v1';
@@ -11,7 +12,31 @@ const $ = selector => document.querySelector(selector);
 let threshold = -20;
 let readings = new Map();
 let filter = 'all';
-let sort = 'watchlist';
+const names = {VTI:'Vanguard Total Stock Market ETF', VXUS:'Vanguard Total International Stock ETF', GOOGL:'Alphabet', META:'Meta Platforms', MSFT:'Microsoft', NVDA:'NVIDIA', AMD:'Advanced Micro Devices', INTC:'Intel', MRNA:'Moderna', RIVN:'Rivian', 'BTC-USD':'Bitcoin', GLDM:'SPDR Gold MiniShares Trust', ANT:'Anthropic', SPCX:'SpaceX', '^IXIC':'Nasdaq Composite', '^GSPC':'S&P 500'};
+const labels = {'30d':'30-day','6m':'6-month','1y':'1-year','5y':'5-year'};
+const baseCount = TICKERS.length;
+let period = '1y';
+let sort = null;
+function windowFor(item) {
+  return item?.windows?.[period] || (period === '1y' && item?.peak1y
+    ? {...item.peak1y, decline:item.dd1y} : null);
+}
+function displayName(sym) {
+  return names[sym] || readings.get(sym)?.name || sym;
+}
+function setCatalog(rows) {
+  TICKERS.splice(baseCount);
+  for (const row of rows) {
+    if (typeof row?.sym === 'string' && /^[A-Z^][A-Z0-9.^=-]{0,19}$/.test(row.sym) &&
+        ['stock','index','etf','crypto'].includes(row.kind) && !TICKERS.some(t => t.sym === row.sym)) {
+      TICKERS.push({sym:row.sym,kind:row.kind});
+    }
+  }
+}
+function saveSettings() {
+  try {localStorage.setItem(SETTINGS_KEY,JSON.stringify({threshold,period,sort}));}
+  catch {storageWarning = true;}
+}
 let refreshing = false;
 let lastChecked = 0;
 let generatedAt = null;
@@ -104,7 +129,10 @@ function peakOf(item, name) {
 function cardFor(ticker) {
   const item = readings.get(ticker.sym);
   const valid = validReading(item);
-  const alert = freshReading(item) && item.dd1y <= threshold;
+  const win = windowFor(item);
+  const dd = win?.decline;
+  const alert = freshReading(item) && Number.isFinite(dd) && dd <= threshold;
+  const quote = n => ticker.kind === 'index' ? price(n).replace('$','') : price(n);
   const stale = valid && !freshReading(item);
   const card = node('article',`ticker-card${alert ? ' alert' : ''}`);
   card.setAttribute('aria-label',`${ticker.sym}${alert ? ', in review zone' : ''}`);
@@ -113,29 +141,31 @@ function cardFor(ticker) {
   id.append(node('span',`ticker-icon ${ticker.kind}`, ticker.kind === 'crypto' ? '₿' : ticker.kind === 'etf' ? '▥' : ticker.sym[0]));
   const name = node('div');
   name.append(node('h3','ticker-name',ticker.sym),node('span','ticker-kind',ticker.kind === 'etf' ? 'ETF' : ticker.kind));
+  name.append(node('span','asset-name',displayName(ticker.sym)));
   id.append(name);
-  const current = node('div','price',valid ? price(item.price) : '—');
-  current.append(node('span','price-label','USD'));
+  const current = node('div','price',valid ? quote(item.price) : '—');
+  current.append(node('span','price-label',ticker.kind === 'index' ? 'points' : 'USD'));
   top.append(id,current);
   card.append(top);
   const main = node('div','drawdown-main');
   const mainValue = node('div');
-  mainValue.append(node('div',`drawdown-value ${valid ? severity(item.dd1y) : 'skeleton'}`,valid ? pct(item.dd1y) : '—'),node('span','drawdown-label','from the 1-year peak'));
+  mainValue.append(node('div',`drawdown-value ${valid ? severity(dd) : 'skeleton'}`,valid ? pct(dd) : '—'),node('span','drawdown-label',`from the ${labels[period]} peak`));
   main.append(mainValue);
-  if (valid) main.append(node('span',`badge ${stale ? 'cached-badge' : alert ? 'alert-badge' : ''}`,stale ? 'Cached' : alert ? 'Review zone' : item.dd1y > 0 ? 'Above recorded high' : item.dd1y >= -1 ? 'Near peak' : 'Below peak'));
+  if (valid) main.append(node('span',`badge ${stale ? 'cached-badge' : alert ? 'alert-badge' : ''}`,stale ? 'Cached' : !win ? 'Period unavailable' : alert ? 'Review zone' : dd > 0 ? 'Above recorded high' : dd >= -1 ? 'Near peak' : 'Below peak'));
   else main.append(node('span','badge unavailable-badge',refreshing ? 'Checking' : item?.error ? 'Unavailable' : 'Not checked'));
   card.append(main);
   if (valid) {
     const bar = node('div','peak-bar');
     const fill = node('div','peak-fill');
-    fill.style.width = `${Math.max(0,Math.min(100,100 + item.dd1y))}%`;
+    fill.style.width = `${Math.max(0,Math.min(100,100 + dd))}%`;
     bar.append(fill);
     card.append(bar);
-    const peak1y = peakOf(item,'peak1y');
+    const peak1y = win || {};
     const peakMax = peakOf(item,'peakMax');
     const details = node('div','card-details');
-    details.append(detail('1-year peak',price(peak1y.peak),shortDate(peak1y.ts)), detail('Drawdown from history high',pct(item.ddMax),Number.isFinite(peakMax.peak) ? `Highest in available history: ${price(peakMax.peak)} · ${shortDate(peakMax.ts)}` : 'Peak unavailable'));
+    details.append(detail(labels[period]+' peak',quote(peak1y.peak),shortDate(peak1y.ts)), detail('Drawdown from history high',pct(item.ddMax),Number.isFinite(peakMax.peak) ? `Highest in available history: ${quote(peakMax.peak)} · ${shortDate(peakMax.ts)}` : 'Peak unavailable'));
     card.append(details);
+    if (win?.partial) card.append(node('p','basis-copy','Shorter history: measured since '+shortDate(item.historyStart)+'.'));
     if (item.returns && (Number.isFinite(item.returns.month) || Number.isFinite(item.returns.quarter))) {
       const returns = node('div','recent-returns');
       returns.append(detail('30-day return',pct(item.returns.month)),detail('90-day return',pct(item.returns.quarter)));
@@ -154,20 +184,25 @@ function cardFor(ticker) {
 function render() {
   const available = TICKERS.filter(ticker => validReading(readings.get(ticker.sym)));
   const fresh = available.filter(ticker => freshReading(readings.get(ticker.sym)));
-  const alerts = fresh.filter(ticker => readings.get(ticker.sym).dd1y <= threshold);
+  const alerts = fresh.filter(ticker => Number.isFinite(windowFor(readings.get(ticker.sym))?.decline) && windowFor(readings.get(ticker.sym)).decline <= threshold);
   $('#alert-count').textContent = String(alerts.length);
   $('#review-freshness').textContent = `${fresh.length}/${TICKERS.length} current readings. Cached readings appear in All.`;
   $('#filter-alert-count').textContent = String(alerts.length);
   $('#threshold-button').textContent = pct(threshold,Number.isInteger(threshold) ? 0 : 1);
   const shown = filter === 'alerts' ? alerts : [...TICKERS];
   const review = filter === 'alerts';
-  const activeSort = review ? 'drawdown' : sort;
+  const activeSort = sort || (review ? 'drawdown' : 'watchlist');
   $('#sort-select').value = activeSort;
-  $('#sort-select').disabled = review;
-  if (activeSort === 'drawdown') shown.sort((a,b) => {
-    const left = readings.get(a.sym);
-    const right = readings.get(b.sym);
-    return (validReading(left) ? left.dd1y : Infinity) - (validReading(right) ? right.dd1y : Infinity);
+  $('#period-select').value = period;
+  $('#period-caption').textContent = labels[period];
+  $('#watch-count').textContent = $('#filter-all span').textContent = TICKERS.length;
+  if (activeSort === 'name') shown.sort((a,b) => displayName(a.sym).localeCompare(displayName(b.sym)) || a.sym.localeCompare(b.sym));
+  if (activeSort === 'drawdown' || activeSort === 'smallest') shown.sort((a,b) => {
+    const left = windowFor(readings.get(a.sym))?.decline;
+    const right = windowFor(readings.get(b.sym))?.decline;
+    if (!Number.isFinite(left)) return Number.isFinite(right) ? 1 : 0;
+    if (!Number.isFinite(right)) return -1;
+    return activeSort === 'drawdown' ? left-right : right-left;
   });
   $('#cards').replaceChildren(...shown.map(cardFor));
   $('#cards').setAttribute('aria-busy',String(refreshing));
@@ -191,8 +226,11 @@ function loadSaved() {
   try {
     const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null');
     if (Number.isFinite(saved?.threshold) && saved.threshold >= -100 && saved.threshold < 0) threshold = saved.threshold;
+    if (Object.hasOwn(labels,saved?.period)) period = saved.period;
+    if (['name','drawdown','smallest','watchlist'].includes(saved?.sort)) sort = saved.sort;
     const cache = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
     if (cache && Array.isArray(cache.results)) {
+      setCatalog(cache.catalog || cache.results);
       for (const item of cache.results) if (validReading(item) && TICKERS.some(t => t.sym === item.sym)) readings.set(item.sym,{...item,cached:true});
       generatedAt = cache.generatedAt;
       usingCache = readings.size > 0;
@@ -203,7 +241,7 @@ function loadSaved() {
 }
 function persistReadings() {
   try {
-    localStorage.setItem(CACHE_KEY,JSON.stringify({generatedAt,results:[...readings.values()].filter(validReading)}));
+    localStorage.setItem(CACHE_KEY,JSON.stringify({generatedAt,catalog:TICKERS,results:[...readings.values()].filter(validReading)}));
   } catch {
     storageWarning = true;
   }
@@ -221,6 +259,7 @@ async function refresh() {
     if (!response.ok) throw new Error(response.status === 404 ? 'The first snapshot may still be publishing.' : `The snapshot is unavailable (${response.status}).`);
     const data = await response.json();
     if (!data || !Array.isArray(data.results)) throw new Error('The snapshot could not be read.');
+    setCatalog(data.results);
     const incoming = new Map(data.results.filter(item => item && typeof item.sym === 'string').map(item => [item.sym,item]));
     let failures = 0;
     for (const ticker of TICKERS) {
@@ -272,14 +311,26 @@ $('#settings-form').addEventListener('submit',event => {
   const value = Number($('#threshold-input').value);
   if (!Number.isFinite(value) || value < -100 || value >= 0) return;
   threshold = value;
-  try { localStorage.setItem(SETTINGS_KEY,JSON.stringify({threshold})); } catch { setMessage('Your threshold changed for this visit, but this browser could not save it.'); }
+  saveSettings();
   render();
   $('#settings-dialog').close();
 });
 $('#refresh-button').addEventListener('click',refresh);
 $('#filter-all').addEventListener('click',() => {filter='all';render();});
 $('#filter-alerts').addEventListener('click',() => {filter='alerts';render();});
-$('#sort-select').addEventListener('change',event => {sort=event.target.value;render();});
+$('#sort-select').addEventListener('change',event => {sort=event.target.value;saveSettings();render();});
+$('#period-select').addEventListener('change',event => {period=event.target.value;saveSettings();render();});
+$('#ticker-form').addEventListener('submit',event => {
+  event.preventDefault();
+  const sym = $('#symbol-input').value.trim().toUpperCase();
+  const message = $('#ticker-feedback');
+  if (!/^[A-Z^][A-Z0-9.^=-]{0,19}$/.test(sym)) {message.textContent = 'Enter a valid ticker symbol.'; return;}
+  if (TICKERS.some(t => t.sym === sym)) {message.textContent = sym + ' is already on your list.'; return;}
+  const url = new URL('https://github.com/aha121coex/liftlog/issues/new');
+  url.searchParams.set('title','Track '+$('#kind-input').value+': '+sym);
+  url.searchParams.set('body','Submit this issue to add '+sym+' to the public Drawdown watchlist. Keep it open to continue tracking.');
+  location.assign(url.href);
+});
 document.addEventListener('visibilitychange',() => {if (!document.hidden && Date.now()-lastChecked >= HOUR) refresh();});
 window.addEventListener('online',() => {if (!document.hidden) refresh();});
 window.addEventListener('offline',() => {setStatus('You’re offline','warning');setMessage('You’re offline. Displayed readings keep their original quote times.');});

@@ -15,6 +15,10 @@ export const DEFAULT_TICKERS = Object.freeze([
   { sym: 'RIVN', kind: 'stock' },
   { sym: 'BTC-USD', kind: 'crypto' },
   { sym: 'GLDM', kind: 'etf' },
+  { sym: 'ANT', kind: 'stock' },
+  { sym: 'SPCX', kind: 'stock' },
+  { sym: '^IXIC', kind: 'index' },
+  { sym: '^GSPC', kind: 'index' },
 ].map(Object.freeze));
 
 const positive = value => Number.isFinite(value) && value > 0;
@@ -192,6 +196,15 @@ export function analyzeTicker({ sym, kind, live, history, now = Date.now() / 100
   // Subtract first so a price exactly 20% below 100 does not round up to
   // -19.999999999999996 and miss the inclusive alert threshold.
   const dd1y = ((comparisonPrice - peak1y.peak) / peak1y.peak) * 100;
+  const windows = {};
+  for (const [key, days] of Object.entries({'30d':30,'6m':183,'1y':365,'5y':1826})) {
+    const cutoff = analysisAsOf - days * 86400;
+    const peak = findPeak(series, cutoff);
+    if (peak) windows[key] = {
+      ...peak, decline: ((comparisonPrice - peak.peak) / peak.peak) * 100,
+      partial: series[0].ts > cutoff,
+    };
+  }
   const ddMax = ((comparisonPrice - peakMax.peak) / peakMax.peak) * 100;
   if (!Number.isFinite(dd1y) || !Number.isFinite(ddMax)) {
     throw new Error('Drawdown could not be calculated.');
@@ -207,6 +220,7 @@ export function analyzeTicker({ sym, kind, live, history, now = Date.now() / 100
     session: live.session ?? null,
     dd1y,
     ddMax,
+    windows,
     returns: trailingReturns(history, live, analysisAsOf),
     recoveryTo1y,
     peak1y,
