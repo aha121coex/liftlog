@@ -29,8 +29,8 @@ export function validSnapshotRow(row, now) {
     Math.abs(expected(row.peakMax.peak) - row.ddMax) < 0.000001;
 }
 
-function indexRows(snapshot) {
-  const allowed = new Set(DEFAULT_TICKERS.map(ticker => ticker.sym));
+function indexRows(snapshot, tickers) {
+  const allowed = new Set(tickers.map(ticker => ticker.sym));
   const rows = new Map();
   if (!Array.isArray(snapshot?.results)) return rows;
   // A repeated symbol makes its reading ambiguous. Keep it unavailable rather
@@ -57,11 +57,18 @@ function publicRow(row, ticker) {
     peakMax: { peak: row.peakMax.peak, ts: row.peakMax.ts },
     currency: 'USD',
   };
-  for (const key of ['basis', 'preferredBasis', 'session', 'quoteSource', 'historyCoverage']) {
+  for (const key of ['name', 'basis', 'preferredBasis', 'session', 'quoteSource', 'historyCoverage']) {
     if (typeof row[key] === 'string') result[key] = row[key].slice(0, 100);
   }
   for (const key of ['comparisonPrice', 'fallbackCount', 'excludedFallbackCount', 'invalidCount', 'historyStart', 'historyEnd', 'recoveryTo1y']) {
     if (Number.isFinite(row[key]) && row[key] >= 0) result[key] = row[key];
+  }
+  result.windows = {};
+  for (const key of ['30d','6m','1y','5y']) {
+    const window = row.windows?.[key];
+    if (validPeak(window, row.asOf) && Number.isFinite(window.decline)) {
+      result.windows[key] = {peak:window.peak, ts:window.ts, decline:window.decline, partial:window.partial === true};
+    }
   }
   if (row.returns && typeof row.returns === 'object') {
     result.returns = {};
@@ -77,15 +84,15 @@ function publicRow(row, ticker) {
  * A new publication is an attempted update, not a new quote timestamp.
  * Valid fallback rows retain their original price, quote time and fetchedAt.
  */
-export function mergeSnapshots(fresh, previous = null) {
+export function mergeSnapshots(fresh, previous = null, tickers = DEFAULT_TICKERS) {
   const now = timestamp(fresh?.generatedAt);
   if (!now) throw new Error('Snapshot generation time is invalid.');
   const generatedAt = new Date(now * 1000).toISOString();
-  const current = indexRows(fresh);
-  const saved = indexRows(previous);
+  const current = indexRows(fresh, tickers);
+  const saved = indexRows(previous, tickers);
   let updatedCount = 0;
   let availableCount = 0;
-  const results = DEFAULT_TICKERS.map(ticker => {
+  const results = tickers.map(ticker => {
     const next = current.get(ticker.sym);
     const old = saved.get(ticker.sym);
     const oldFetchedAt = timestamp(old?.fetchedAt) ?? timestamp(previous?.generatedAt);

@@ -16,7 +16,7 @@ function chart({ times = [100, 200, 300], high = [12, 30, 20], close = [11, 25, 
 test('default watchlist preserves supplied symbols, order, and asset kinds', () => {
   assert.deepEqual(DEFAULT_TICKERS.map(t => t.sym), [
     'VTI', 'VXUS', 'GOOGL', 'META', 'MSFT', 'NVDA', 'AMD', 'INTC',
-    'MRNA', 'RIVN', 'BTC-USD', 'GLDM',
+    'MRNA', 'RIVN', 'BTC-USD', 'GLDM', 'ANT', 'SPCX', '^IXIC', '^GSPC',
   ]);
   assert.equal(DEFAULT_TICKERS.filter(t => t.kind === 'etf').length, 3);
 });
@@ -269,4 +269,15 @@ test('period cutoffs and history bounds use the quote timestamp when the quote i
   assert.equal(result.returns.month, 50);
   assert.equal(result.returns.year, 200);
   assert.equal(result.comparisonPrice, result.price);
+});
+
+test('each ranking window uses its own in-window high and flags shorter histories', () => {
+  const now = 1800000000;
+  const offsets = [1600,350,170,30,0];
+  const series = offsets.map((days,i) => ({ts:now-days*86400,val:[200,160,125,100,80][i]}));
+  const result = analyzeTicker({sym:'TEST',kind:'stock',now,live:{price:80,asOf:now},history:{series}});
+  assert.deepEqual(Object.fromEntries(Object.entries(result.windows).map(([k,w]) => [k,w.decline])),
+    {'30d':-20,'6m':-36,'1y':-50,'5y':-60});
+  assert.equal(result.windows['5y'].partial,true);
+  assert.equal(result.windows['1y'].partial,false);
 });

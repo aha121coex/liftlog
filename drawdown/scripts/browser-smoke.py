@@ -11,8 +11,8 @@ from urllib.parse import urlsplit
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
-SYMBOLS = [('VTI','etf'),('VXUS','etf'),('GOOGL','stock'),('META','stock'),('MSFT','stock'),('NVDA','stock'),('AMD','stock'),('INTC','stock'),('MRNA','stock'),('RIVN','stock'),('BTC-USD','crypto'),('GLDM','etf')]
-DRAWDOWNS = [-20,-5,-30,1,-19.9,-10,-50,-0.5,-40,-25,-15,-3]
+SYMBOLS = [('VTI','etf'),('VXUS','etf'),('GOOGL','stock'),('META','stock'),('MSFT','stock'),('NVDA','stock'),('AMD','stock'),('INTC','stock'),('MRNA','stock'),('RIVN','stock'),('BTC-USD','crypto'),('GLDM','etf'),('ANT','stock'),('SPCX','stock'),('^IXIC','index'),('^GSPC','index')]
+DRAWDOWNS = [-20,-5,-30,1,-19.9,-10,-50,-0.5,-40,-25,-15,-3,-4,-7,-5,-9]
 PUBLIC = {'index.html','styles.css','app.js','sw.js','manifest.webmanifest','icon.svg','icon-192.png','icon-512.png','apple-touch-icon.png'}
 MIME = {'.html':'text/html','.js':'text/javascript','.css':'text/css','.webmanifest':'application/manifest+json','.svg':'image/svg+xml','.png':'image/png'}
 
@@ -24,6 +24,7 @@ def snapshot():
         rows.append({'sym':sym,'kind':kind,'price':100+dd,'asOf':now,'dd1y':dd,'ddMax':dd-1,
                      'peak1y':{'peak':100,'ts':now-86400},'peakMax':{'peak':101,'ts':now-864000},
                      'returns':{'month':-3.2,'quarter':5.1},'recoveryTo1y':max(0,(100/(100+dd)-1)*100),
+                     'windows':{k:{'peak':100,'ts':now-86400,'decline':(dd/2 if k=='30d' else dd),'partial':False} for k in ['30d','6m','1y','5y']},
                      'basis':'adjclose' if kind=='etf' else 'high','fallbackCount':0,'cached':False})
     return {'generatedAt':datetime.now(timezone.utc).isoformat(),'results':rows}
 
@@ -89,8 +90,8 @@ def main():
         Handler.status=503
         ep.goto(base+'/drawdown/')
         ready(ep)
-        check(ep.locator('.ticker-card').count()==12,'initial outage omitted placeholder cards')
-        check(ep.locator('.drawdown-value').all_text_contents()==['—']*12,'initial outage fabricated drawdowns')
+        check(ep.locator('.ticker-card').count()==16,'initial outage omitted placeholder cards')
+        check(ep.locator('.drawdown-value').all_text_contents()==['—']*16,'initial outage fabricated drawdowns')
         check(ep.locator('#alert-count').inner_text()=='0','initial outage fabricated review count')
         check('$' not in ep.locator('#cards').inner_text(),'initial outage fabricated prices')
         empty.close()
@@ -107,10 +108,10 @@ def main():
         }""")
         page.goto(base+'/drawdown/')
         ready(page)
-        check(page.locator('.ticker-card').count()==12,'full snapshot must show all 12 tickers')
+        check(page.locator('.ticker-card').count()==16,'full snapshot must show all 16 tickers')
         check(page.locator('#alert-count').inner_text()=='5','inclusive -20 review threshold failed')
         check('Above recorded high' in page.locator('.ticker-card').nth(3).inner_text(),'new high badge missing')
-        check(page.locator('.card-bottom').count()==12,'per-symbol quote times missing')
+        check(page.locator('.card-bottom').count()==16,'per-symbol quote times missing')
         check('30-day return' in page.locator('#cards').inner_text(),'rolling-period return label incorrect')
         for width in [320,390,768]:
             page.set_viewport_size({'width':width,'height':844})
@@ -126,6 +127,13 @@ def main():
         check(page.locator('.ticker-name').first.inner_text()=='AMD','drawdown sorting failed')
         page.click('#filter-alerts')
         check(page.locator('.ticker-card').count()==5,'review filter count incorrect')
+        page.select_option('#period-select','30d')
+        check(page.locator('.ticker-card').count()==2,'period did not update review membership')
+        page.select_option('#sort-select','smallest')
+        check(page.locator('.ticker-name').first.inner_text()=='MRNA','smallest decline order failed')
+        page.select_option('#sort-select','name')
+        check(page.locator('.ticker-name').first.inner_text()=='AMD','company name order failed')
+        page.select_option('#period-select','1y')
         page.click('#settings-open')
         page.fill('#threshold-input','-30')
         page.click('#settings-form button[type=submit]')
@@ -145,14 +153,14 @@ def main():
         Handler.data['generatedAt']=datetime.fromtimestamp(datetime.now(timezone.utc).timestamp()-3*3600,timezone.utc).isoformat()
         refresh(page)
         check(page.locator('#alert-count').inner_text()=='0','old snapshot counted as current')
-        check(page.locator('.cached-badge').count()==12,'old snapshot cards not visibly cached')
+        check(page.locator('.cached-badge').count()==16,'old snapshot cards not visibly cached')
         Handler.data=snapshot()
         refresh(page)
         check(page.locator('#alert-count').inner_text()=='3','fresh snapshot did not recover')
         original_quote=page.locator('.card-bottom').first.inner_text().split(' · ')[0]
         Handler.status=503
         refresh(page)
-        check(page.locator('.cached-badge').count()==12,'network failure did not preserve cached cards')
+        check(page.locator('.cached-badge').count()==16,'network failure did not preserve cached cards')
         check(page.locator('.card-bottom').first.inner_text().split(' · ')[0]==original_quote,'refresh changed actual quote timestamp')
         Handler.status=200
         refresh(page)
@@ -169,8 +177,8 @@ def main():
             context.set_offline(True)
         page.reload(wait_until='domcontentloaded')
         ready(page)
-        check(page.locator('.ticker-card').count()==12,'offline cold reload lost the watchlist')
-        check(page.locator('.cached-badge').count()==12,'offline saved readings were presented as current')
+        check(page.locator('.ticker-card').count()==16,'offline cold reload lost the watchlist')
+        check(page.locator('.cached-badge').count()==16,'offline saved readings were presented as current')
         check(page.locator('#alert-count').inner_text()=='0','offline cached readings counted as current')
         check(page.evaluate("localStorage.getItem('liftlog.personal.v1')")=='sentinel-workout','LiftLog storage was modified')
         check(page.evaluate("caches.has('liftlog-shell-sentinel')"),'LiftLog cache was deleted')

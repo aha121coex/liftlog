@@ -7,6 +7,7 @@ on:
     - cron: '23 * * * *'
 permissions:
   contents: read
+  issues: read
 concurrency:
   group: liftlog-pages
   cancel-in-progress: false
@@ -29,6 +30,8 @@ jobs:
         run: npm --prefix drawdown test
       - run: python3 scripts/build-site.py
       - name: Fetch public watchlist snapshot
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: node drawdown/scripts/update-data.mjs --output dist/drawdown/data/monitor.json
       - uses: actions/upload-pages-artifact@v3
         with:

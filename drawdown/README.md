@@ -1,6 +1,6 @@
 # Drawdown Monitor
 
-An iPhone Home Screen watchlist for reviewing pullbacks in 12 ETFs, stocks and Bitcoin. Open the published app in Safari, use **Share → Add to Home Screen**, then tap **Add**. No Mac, App Store account or new market-data account is needed.
+An iPhone Home Screen watchlist for reviewing pullbacks in stocks, ETFs, Bitcoin and broad market indexes. Open the published app in Safari, use **Share → Add to Home Screen**, then tap **Add**. No Mac, App Store account or new market-data account is needed.
 
 The app shows a rolling 365-day drawdown, drawdown from the highest reading in available history, 30- and 90-day returns, and the gain needed to regain the one-year peak. Change the review threshold in Settings or sort by drawdown. A review flag is a historical comparison, not a valuation or purchase recommendation; the same percentage can represent different risks across assets.
 
@@ -29,3 +29,9 @@ The updater uses a previous local or published snapshot for per-symbol recovery.
 The app uses only `drawdown.monitor.settings.v1` and `drawdown.monitor.readings.v1` in localStorage, and caches prefixed `drawdown-monitor-shell-`. It never changes LiftLog's storage or offline caches. Both apps share a GitHub Pages origin, so only trusted code should be hosted there. The monitor has its own manifest identity and worker scope under `/liftlog/drawdown/`.
 
 Browser and automated checks do not establish physical iPhone reliability. The final installation check is opening the published URL in Safari, adding it to the Home Screen and reopening the icon.
+
+## Manage the watchlist
+
+Choose a period and a sort order on either list. Periods are rolling 30, 183, 365 and 1,826 days, ending at the quote timestamp. Each decline compares the quote with the highest available observation in that window. Shorter histories are flagged. Company and fund names determine A–Z order. The Nasdaq Composite and S&P 500 are displayed in index points.
+
+Use **Add a ticker** to enter a USD stock, ETF, crypto pair or index symbol. Continue to GitHub and submit the prefilled public issue as the repository owner. The next scheduled update reads open owner-created requests and adds matching symbols, up to 50 total. Close a request to remove the custom symbol. Unknown or unavailable symbols display a data error.
